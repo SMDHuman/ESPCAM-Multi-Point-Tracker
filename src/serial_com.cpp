@@ -45,14 +45,6 @@ void serial_task(){
         camera_capture_mode = ONLED;
       break;
       //...
-      case RQT_FRAME:
-        send_slip_single(FRAME);
-        send_slip_single(TRACKER_WIDTH);
-        send_slip_single(TRACKER_HEIGHT);
-        send_slip(tracker_buffer_A, TRACKER_BUF_LEN);
-        end_slip();
-      break;
-      //...
       case RQT_RECTS:
         send_slip_single(RECTS);
         send_slip((uint8_t*)tracker_points_rect, tracker_points_len*sizeof(point_rect_t));
@@ -68,14 +60,14 @@ void serial_task(){
       }
       break;
       //...
-      case RQT_T_FRAME_SIZE:
+      case RQT_TRACKER_FRAME_SIZE:
         send_slip_single(TRACKER_SIZE);
         send_slip_single(TRACKER_WIDTH);
         send_slip_single(TRACKER_HEIGHT);
         end_slip();
       break;
       //...
-      case RQT_C_FRAME_SIZE:
+      case RQT_CAMERA_FRAME_SIZE:
       {
         send_slip_single(CAMERA_SIZE);
         convert64_u cw{.number=camera_width};
@@ -88,8 +80,7 @@ void serial_task(){
       //...
       case RQT_TRACKER_FRAME:
       {
-        uint8_t section = slip_package_buffer[1];
-        request_frame = section;
+        request_frame = slip_package_buffer[1];
       }
       break;
       //...

@@ -5,7 +5,6 @@
 #include "esp_camera.h"
 #include "serial_com.h"
 #include "camera.h"
-#include "beacon_com.h"
 #include "tracker.h"
 #include "config.h"
 #include "slip_decoder.h"
@@ -28,15 +27,14 @@ void setup() {
   serial_init();
   tracker_init();
   camera_init();
-  beacon_init();
 }
 
 //-----------------------------------------------------------------------------
 void loop() {
+  slip_task();
   config_task();
   serial_task();
   camera_task();
-  beacon_task();
   tracker_task();
   led_task();
 }

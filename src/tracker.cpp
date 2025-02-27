@@ -3,7 +3,6 @@
 //-----------------------------------------------------------------------------
 #include "tracker.h"
 #include "camera.h"
-#include "beacon_com.h"
 #include "serial_com.h"
 
 //#define DEBUG
@@ -41,28 +40,31 @@ void tracker_task(){
     filter_buffer();
     if(request_frame == 1){
       send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 1);
+      request_frame = 0;
     }
     //...
     //switch_buffers();
     erode_buffer();
     if(request_frame == 2){
       send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 2);
+      request_frame = 0;
     }
     //...
     //switch_buffers();
     dilate_buffer();
     if(request_frame == 3){
       send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 3);
+      request_frame = 0;
     }
     //...
     flood_buffer();
     if(request_frame == 4){
       send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 4);
+      request_frame = 0;
     }
     locate_rect_buffer();
     tracker_status = WAIT;
     tracker_frame_count++;
-    request_frame = 0;
   }
 }
 //-----------------------------------------------------------------------------

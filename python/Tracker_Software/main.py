@@ -8,21 +8,21 @@ from random import randint
 #------------------------------------------------------------------------------
 class App(Layout):
     def __init__(self) -> None:
+        # Initiazlize layout
         super().__init__()
-        #...
+        # Initialize app global variables
         self.camera_size = (0, 0)
         self.tracker_size = (0, 0)
         self.esp_config: list = [0]*19
         self.esp_config_struct = "BbbbBBBBBBbHBBBBBHI"
         self.rand_colors = [(randint(0, 255), randint(0, 255), randint(0, 255)) for i in range(255)]
-        #...
+        # Initialize Serial
         self.sercom = SerialCOM()
         self.sercom.set_disconnect_callback(self.update_com_list)
         self.sercom.set_receive_callback(self.package_received)
-        #...
+        # Configure UI elements callbacks
         self.serial_port_select.bind("<<ComboboxSelected>>", self.serial_port_select_event)
         self.serial_port_select.bind("<Button-1>", self.update_com_list)
-        #...
         self.send_config_button.configure(command = self.send_config)
         #...
         def f():
@@ -34,18 +34,17 @@ class App(Layout):
         self.request_eroded_button.configure(command = lambda: self.sercom.send_slip(bytearray([0x13, 2])))
         self.request_dilated_button.configure(command = lambda: self.sercom.send_slip(bytearray([0x13, 3])))  
         self.request_flooded_button.configure(command = lambda: self.sercom.send_slip(bytearray([0x13, 4])))
-        #...
         self.serial_connect_button.configure(command=self.serial_connect_event)
         self.serial_disconnect_button.configure(command=self.serial_disconnect_event)
         self.serial_baudrate_select.bind("<<ComboboxSelected>>", self.serial_baudrate_select_event)
-        #...
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
+        self.bind("<Configure>", self.on_window_resize)
         #...
         self.update_com_list()
-        #...
+        # Set a loop to request frame count every second
         self.last_framecount = 0
         self.after(1000, self.request_framecount)
-
+        # This is for GC to not remove images
         self._imgs = {}
     #--------------------------------------------------------------------------
     # Request frame count every second
@@ -53,7 +52,7 @@ class App(Layout):
         self.sercom.send_slip(bytearray([0x10]))
         self.after(1000, self.request_framecount)
     #--------------------------------------------------------------------------
-    #...
+    # When slip message received, this function called 
     def package_received(self, package):
         #print("Package Type:", package[0])
         # Frames
@@ -134,6 +133,10 @@ class App(Layout):
         elif(self.serial_port_select.get() == "None"):
             self.serial_port_select.set(coms[0])
             self.serial_port_select_event()
+    #--------------------------------------------------------------------------
+    #...
+    def on_window_resize(self, event):
+        self.selected_frame_canvas.event_generate("<Button-1>")
     #--------------------------------------------------------------------------
     #...
     def serial_port_select_event(self, event = None):
