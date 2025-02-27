@@ -11,7 +11,7 @@ from random import randint
 camera_size = (240, 240)
 erode_size = 5
 erode_ratio = 3/5
-dilate_size = 12
+dilate_size = 10
 # Initialize things
 pg.init()
 win = pg.display.set_mode(list(np.multiply(camera_size, (3, 2))))
@@ -19,8 +19,8 @@ clock = pg.time.Clock()
 
 pgcam.init()
 print("Cameras:", pgcam.list_cameras())
-cam = pgcam.Camera()
-cam.start()
+#cam = pgcam.Camera()
+#cam.start()
 
 cam_surf = pg.Surface(camera_size)
 filter_surf = pg.Surface(camera_size)
@@ -78,11 +78,13 @@ while(True):
             mouse_down = event.button
     #--------------------------------------------------------------------------
     # Camera resizing and cropping
-    img = cam.get_image()
+    #img = cam.get_image()
+    img = pg.image.load("room.jpg")
     crop_by = min(img.get_size())
     w = int(camera_size[0]*img.get_width()/crop_by)
     h = int(camera_size[1]*img.get_height()/crop_by)
     img = pg.transform.scale(img, (w, h))
+    img = pg.transform.grayscale(img)
 
     # Camera surface Ready
     cam_surf.blit(img, ((camera_size[0]-w)/2, (camera_size[1]-h)/2))
@@ -93,7 +95,7 @@ while(True):
         for x in range(camera_size[0]):
             r, g, b, a = cam_surf.get_at((x, y))
             gc = (r+g+b)/3
-            f = 235 < gc < 255
+            f = 220 < gc < 255
             color = ["black", "white"][f]
             filter_surf.set_at((x, y), color)
 
