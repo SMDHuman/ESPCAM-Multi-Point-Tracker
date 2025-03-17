@@ -12,11 +12,6 @@
 #define BAUDRATE 115200
 #define S_MAX_PACKAGE 1024
 
-#define S_END 0xC0
-#define S_ESC 0xDB
-#define S_ESC_END 0xDC
-#define S_ESC_ESC 0xDD
-
 //-----------------------------------------------------------------------------
 void serial_init();
 void serial_task();
@@ -27,7 +22,6 @@ void serial_send_slip(int data);
 void serial_send_slip(char data);
 void serial_send_slip(String data);
 void serial_end_slip();
-uint32_t serial_get_checksum();
 
 //-----------------------------------------------------------------------------
 #endif
