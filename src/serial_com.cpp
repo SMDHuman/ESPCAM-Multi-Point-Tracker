@@ -4,9 +4,10 @@
 //-----------------------------------------------------------------------------
 #include <Arduino.h>
 #include "serial_com.h"
+#include "command_handler.h"
+
 #define SLIP_IMPLEMENTATION
 #include "p_slip.h"
-#include "command_handler.h"
 
 static uint32_t checksum = 0;
 static uint8_t rx_slip_buffer[2028];

@@ -1,12 +1,11 @@
 //-----------------------------------------------------------------------------
 // File: espnow_handler.cpp
 //-----------------------------------------------------------------------------
+#include <Arduino.h>
 #include "espnow_handler.h"
+#include "serial_com.h"
 #include "esp_now.h"
 #include "WiFi.h"
-#include "serial_com.h"
-#include <Arduino.h>
-#include "tracker.h"
 
 #define MAX_PEERS 5
 

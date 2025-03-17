@@ -5,8 +5,6 @@
 #ifndef SERIAL_COM_H
 #define SERIAL_COM_H
 #include <Arduino.h>
-#include "esp_camera.h"
-#include "config.h"
 
 //-----------------------------------------------------------------------------
 #define BAUDRATE 115200

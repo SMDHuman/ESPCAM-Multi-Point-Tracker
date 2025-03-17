@@ -51,7 +51,7 @@ uint8_t slip_is_ready(uint8_t *buffer);
     //-----------------------------------------------------------------------------
     void slip_push(uint8_t *buffer, uint8_t data){
         slip_buffer_header_t *slip_buffer_header = (slip_buffer_header_t *)buffer;
-        uint8_t *buffer = buffer + sizeof(slip_buffer_header_t);
+        uint8_t *data_buffer = buffer + sizeof(slip_buffer_header_t);
         if(slip_buffer_header->size <= slip_buffer_header->len){
             slip_reset(buffer);
             slip_buffer_header->overflow = true;
@@ -61,11 +61,11 @@ uint8_t slip_is_ready(uint8_t *buffer);
         }
         if(slip_buffer_header->esc_flag){
             if(data == S_ESC_END){
-                buffer[slip_buffer_header->len++] = S_END;
+                data_buffer[slip_buffer_header->len++] = S_END;
                 slip_buffer_header->checksum += S_END;
             }
             else if(data == S_ESC_ESC){
-                buffer[slip_buffer_header->len++] = S_ESC;
+                data_buffer[slip_buffer_header->len++] = S_ESC;
                 slip_buffer_header->checksum += S_ESC;
             }
             slip_buffer_header->esc_flag = false;
@@ -80,7 +80,7 @@ uint8_t slip_is_ready(uint8_t *buffer);
             }
         }
         else{
-            buffer[slip_buffer_header->len++] = data;
+            data_buffer[slip_buffer_header->len++] = data;
             slip_buffer_header->checksum += data;
         }
     }
@@ -96,16 +96,11 @@ uint8_t slip_is_ready(uint8_t *buffer);
     //-----------------------------------------------------------------------------
     uint8_t slip_is_ready(uint8_t *buffer){
         slip_buffer_header_t *slip_buffer_header = (slip_buffer_header_t *)buffer;
-        uint8_t *buffer = buffer + sizeof(slip_buffer_header_t);
         if(slip_buffer_header->ready){
             if(slip_buffer_header->checksum_enable == true){
-                uint32_t chsm = 0;
-                for(size_t i = 0; i < 4; i++){
-                    uint32_t d = buffer[i+slip_buffer_header->size];
-                    slip_buffer_header->checksum -= d;
-                    chsm += (d << (i*8));
-                }
-                if(slip_buffer_header->checksum == chsm){
+                uint32_t *checksum;
+                memcpy(&checksum, buffer + slip_buffer_header->len, 4);
+                if(slip_buffer_header->checksum == *checksum){
                     return(true);
                 }else{
                     slip_reset(buffer);
