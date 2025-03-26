@@ -5,12 +5,13 @@
 #include "WiFi.h"
 
 #define MAX_PEERS 5
-#define ESPNET_TIMEOUT 1000
+#define ESPNET_TIMEOUT 3000
 
 //-----------------------------------------------------------------------------
 enum ESPNET_PACKETS: uint8_t{
     PACKET_REQ_PING = 0,
     PACKET_RSP_PONG,
+    PACKET_REQ_LEDTOGGLE,
     PACKET_REQ_POINTS,
     PACKET_RSP_POINTS,
     PACKET_REQ_FCOUNT,
@@ -28,14 +29,16 @@ enum ESPNET_PACKETS: uint8_t{
 enum ESPNET_MODES: uint8_t{
     MODE_NONE = 0,
     MODE_HOST,
-    MODE_CLIENT
+    MODE_CLIENT,
+    MODE_SEARCHING
 };
 
 struct espnet_config_t{
     uint8_t id;
     ESPNET_MODES mode;
-    uint8_t mac[6];
-} espnet_config;
+    uint8_t mac[6]; 
+    uint8_t host_mac[6]; 
+};
 
 extern espnet_config_t peer_list[MAX_PEERS];
 extern uint8_t numof_peers;
