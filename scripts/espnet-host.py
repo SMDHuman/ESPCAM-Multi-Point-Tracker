@@ -1,4 +1,4 @@
-from lib.usbnow import USBNow, MAC
+from usb_now.scripts.usbnow import USBNow, MAC
 from enum_parser import enum_parser
 import os, sys
 from time import sleep
