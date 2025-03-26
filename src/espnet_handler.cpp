@@ -157,10 +157,11 @@ void espnow_recv_cb(const uint8_t *mac, const uint8_t *data, int len){
     //-------------------------------------------------------------------------
     case PACKET_REQ_POINTS:
     {
-      uint8_t *packet = (uint8_t*)malloc(sizeof(point_rect_t)*tracker_points_len+1);
+      uint8_t *packet = (uint8_t*)malloc(sizeof(point_rect_t)*tracker_points_len+2);
       packet[0] = PACKET_RSP_POINTS;
-      memcpy(packet+1, tracker_points_rect, sizeof(point_rect_t)*tracker_points_len);
-      esp_now_send(mac, packet, sizeof(point_rect_t)*tracker_points_len+1);
+      packet[1] = tracker_points_len;
+      memcpy(packet+2, tracker_points_rect, sizeof(point_rect_t)*tracker_points_len);
+      esp_now_send(mac, packet, sizeof(point_rect_t)*tracker_points_len+2);
       free(packet);
     }break;
     //-------------------------------------------------------------------------

@@ -6,8 +6,14 @@ from struct import pack, unpack
 import threading
 import pygame as pg
 
+def new_peer(mac: MAC):
+    global peers_points_surf, peers
+    peers.append(mac)
+    peers_points_surf.append(pg.Surface((240, 176)))
+
 # Callback for received data
 def recv_cb(addr: bytes, data: bytes):
+    if(len(data) == 0): return
     tag = int(data[0])
     # -------------------------------------------------------------------------
     if(tag == ESPNET["PACKET_REQ_JOIN"]):
@@ -20,7 +26,7 @@ def recv_cb(addr: bytes, data: bytes):
         usbnow.send(MAC(addr), bytes([ESPNET["PACKET_RSP_JOIN"], _id]))
 
         if(not MAC(addr) in peers):
-            peers.append(MAC(addr))
+            new_peer(MAC(addr))
             usbnow.send(peers[_id-1], bytes([ESPNET["PACKET_REQ_CONFIG"]]))
         
     # -------------------------------------------------------------------------
@@ -32,14 +38,17 @@ def recv_cb(addr: bytes, data: bytes):
         print(f"Received ping response from {MAC(addr)}")
     # -------------------------------------------------------------------------
     if(tag == ESPNET["PACKET_RSP_POINTS"]):
-        point_rects.clear()
-        #points = unpack("B", data[1:])[0]
-        points = unpack(f"{len(data[1:])//4}I", data[1:])
+        lenght = data[1]
+        #print(lenght, data, len(data))
+        if(lenght*4*4 != len(data)-2): return
+        points = unpack(f"{lenght*4}I", data[2:])
+        _id = peers.index(MAC(addr))
+        peers_points_surf[_id].fill(0)
         for i in range(0, len(points), 4):
             x1, y1 = points[i], points[i+1]
             x2, y2 = points[i+2], points[i+3]
-            point_rects.append(pg.Rect(x1, y1, x2-x1, y2-y1))
-
+            rect = pg.Rect(x1, y1, x2-x1, y2-y1)
+            pg.draw.rect(peers_points_surf[_id], (255, 0, 0), rect)
         #print(f"Received {points} points from {MAC(addr)}")
 
 # Parse the ESPNET enum from the header file
@@ -52,15 +61,20 @@ print(enums)
 # Initialize 
 peers: list[MAC] = []
 
-usbnow = USBNow("COM5")
+usbnow = USBNow("COM7")
 usbnow.register_recv_cb(recv_cb)
-usbnow.init()
+err = usbnow.init()
+if(err):
+    print("USBNow has error: ", err)
+    sys.exit(1)
+print("USBNow initialized")
 
 pg.init()
-win = pg.display.set_mode((240, 176))
+win = pg.display.set_mode((240*2, 176*2))
 pg.display.set_caption("ESPNet Host")
 
 point_rects: list[pg.Rect]= []
+peers_points_surf: list[pg.Surface] = []
 
 # Main loop
 running = True
@@ -71,8 +85,9 @@ while running:
     
     if(not running):break
 
-    for rect in point_rects:
-        pg.draw.rect(pg.display.get_surface(), (255, 0, 0), rect)
+    for i, peer in enumerate(peers):
+        win.blit(peers_points_surf[i], (240*(i%2), 176*(i//2)))
+        pg.draw.rect(win, (255, 255, 255), pg.Rect(240*(i%2), 176*(i//2), 240, 176), 1)
 
     for peer in peers:
         usbnow.send(peer, bytes([ESPNET["PACKET_REQ_LEDTOGGLE"]]))
