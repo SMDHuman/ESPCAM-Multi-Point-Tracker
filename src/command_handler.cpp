@@ -5,23 +5,30 @@
 #include "command_handler.h"
 #include <Arduino.h>
 #include "serial_com.h"
-
-//-----------------------------------------------------------------------------
+#include "tracker.h"
+#include "espnow_handler.h"
 
 //-----------------------------------------------------------------------------
 void CMD_init(){
 }
+
 //-----------------------------------------------------------------------------
 void CMD_task(){
 }
 
 //-----------------------------------------------------------------------------
 void CMD_parse(uint8_t *msg_data, uint32_t len){
-  static uint8_t *peer_addr;
-  static esp_err_t res = ESP_OK;
   CMD_TYPE_E cmd = (CMD_TYPE_E)msg_data[0];
-  // Reuse the global peer_info instead of creating a local one
+  uint8_t *data = msg_data + 1; 
+  esp_err_t res;
   switch(cmd){
+  }
+}
 
+//-----------------------------------------------------------------------------
+void RESP_parse(uint8_t *msg_data, uint32_t len){
+  RESP_TYPE_E resp = (RESP_TYPE_E)msg_data[0];
+  uint8_t *data = msg_data + 1; 
+  switch(resp){
   }
 }

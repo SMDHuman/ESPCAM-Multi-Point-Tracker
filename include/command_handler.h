@@ -8,9 +8,23 @@
 
 //-----------------------------------------------------------------------------
 enum CMD_TYPE_E{
+    CMD_NONE = 0,
+    CMD_PING,
+    CMD_RQ_FRAME,
+    CMD_RQ_POINTS,
+    CMD_RQ_FCOUNT,
+    CMD_RQ_CONFIG,
+    CMD_SET_CONFIG,
 };
 
 enum RESP_TYPE_E{
+    RESP_NONE = 0,
+    RESP_PONG,
+    RESP_FRAME,
+    RESP_POINTS,
+    RESP_FCOUNT,
+    RESP_CONFIG,
+    RESP_ERROR,
 };
 
 //-----------------------------------------------------------------------------
