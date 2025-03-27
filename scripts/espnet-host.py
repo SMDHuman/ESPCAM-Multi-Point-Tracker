@@ -62,23 +62,22 @@ ESPNET = enums["ESPNET_PACKETS"]
 print(enums)
 
 # Initialize 
-
 peers: list[MAC] = []
 peers_fps: list[pg.time.Clock] = []
-usbnow = USBNow("COM11", timeout=0.25)
-usbnow.receive_thread.start()
+usbnow = USBNow("COM11", timeout=0.25, wait_resp=False)
 usbnow.register_recv_cb(recv_cb)
+
+# Initialize USBNow
 err = usbnow.init()
 if(err):
     print("USBNow has error: ", err)
     sys.exit(1)
 print("USBNow initialized")
 
+# Initialize Pygame
 pg.init()
 win = pg.display.set_mode((240*2, 176*2))
 pg.display.set_caption("ESPNet Host")
-
-
 
 point_rects: list[pg.Rect]= []
 peers_points_surf: list[pg.Surface] = []
