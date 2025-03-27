@@ -1,11 +1,10 @@
 #ifndef ESPNET_HANDLER_H
 #define ESPNET_HANDLER_H
 
-#include "esp_now.h"
-#include "WiFi.h"
-
 #define MAX_PEERS 5
-#define ESPNET_TIMEOUT 3000
+#define ESPNET_TIMEOUT_SEARCH 3000
+#define ESPNET_TIMEOUT_PING 1000
+#define ESPNET_TIMEOUT_CONLOST 4000
 
 //-----------------------------------------------------------------------------
 enum ESPNET_PACKETS: uint8_t{

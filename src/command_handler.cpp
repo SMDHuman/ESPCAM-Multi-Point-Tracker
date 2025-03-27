@@ -23,11 +23,3 @@ void CMD_parse(uint8_t *msg_data, uint32_t len){
   switch(cmd){
   }
 }
-
-//-----------------------------------------------------------------------------
-void RESP_parse(uint8_t *msg_data, uint32_t len){
-  RESP_TYPE_E resp = (RESP_TYPE_E)msg_data[0];
-  uint8_t *data = msg_data + 1; 
-  switch(resp){
-  }
-}

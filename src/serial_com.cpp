@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------
 // File: serial_com.cpp
-// Last modified: 06/03/2025
+// Last modified: 27/03/2025
 //-----------------------------------------------------------------------------
 #include <Arduino.h>
 #include "serial_com.h"
@@ -35,7 +35,7 @@ void serial_task(){
 //-----------------------------------------------------------------------------
 // Send a byte using the SLIP protocol
 void serial_send_slip(uint8_t data){
-  checksum += data;
+  checksum += data + 1;
   if(data == S_END){
     Serial.write(S_ESC);
     Serial.write(S_ESC_END);

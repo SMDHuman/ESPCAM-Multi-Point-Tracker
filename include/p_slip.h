@@ -62,11 +62,11 @@ uint8_t slip_is_ready(uint8_t *buffer);
         if(slip_buffer_header->esc_flag){
             if(data == S_ESC_END){
                 data_buffer[slip_buffer_header->len++] = S_END;
-                slip_buffer_header->checksum += S_END;
+                slip_buffer_header->checksum += S_END+1;
             }
             else if(data == S_ESC_ESC){
                 data_buffer[slip_buffer_header->len++] = S_ESC;
-                slip_buffer_header->checksum += S_ESC;
+                slip_buffer_header->checksum += S_ESC+1;
             }
             slip_buffer_header->esc_flag = false;
         }
@@ -81,7 +81,7 @@ uint8_t slip_is_ready(uint8_t *buffer);
         }
         else{
             data_buffer[slip_buffer_header->len++] = data;
-            slip_buffer_header->checksum += data;
+            slip_buffer_header->checksum += data+1;
         }
     }
     //-----------------------------------------------------------------------------
@@ -98,8 +98,7 @@ uint8_t slip_is_ready(uint8_t *buffer);
         slip_buffer_header_t *slip_buffer_header = (slip_buffer_header_t *)buffer;
         if(slip_buffer_header->ready){
             if(slip_buffer_header->checksum_enable == true){
-                uint32_t *checksum;
-                memcpy(&checksum, buffer + slip_buffer_header->len, 4);
+                uint32_t *checksum = (uint32_t*)(buffer + slip_buffer_header->len);
                 if(slip_buffer_header->checksum == *checksum){
                     return(true);
                 }else{
