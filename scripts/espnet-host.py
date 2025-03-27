@@ -22,7 +22,7 @@ def recv_cb(addr: bytes, data: bytes):
             _id = len(peers)+1
         else:
             _id = peers.index(MAC(addr))+1
-
+        print(f"Received join request from {MAC(addr)}")
         usbnow.send(MAC(addr), bytes([ESPNET["PACKET_RSP_JOIN"], _id]))
 
         if(not MAC(addr) in peers):
@@ -61,7 +61,7 @@ print(enums)
 # Initialize 
 peers: list[MAC] = []
 
-usbnow = USBNow("COM7")
+usbnow = USBNow("COM11")
 usbnow.register_recv_cb(recv_cb)
 err = usbnow.init()
 if(err):
