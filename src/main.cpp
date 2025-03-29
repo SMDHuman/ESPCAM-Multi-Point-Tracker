@@ -5,7 +5,7 @@
 #include "tracker.h"
 
 void setup() {
-  //serial_init();
+  serial_init();
   espnet_init();
   camera_init();
   tracker_init();
@@ -14,7 +14,7 @@ void setup() {
 void loop() {
   espnet_task();
   camera_task();
-  //serial_task();
+  serial_task();
   tracker_task();
   delay(1);
 }

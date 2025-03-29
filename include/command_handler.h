@@ -15,16 +15,21 @@ enum CMD_TYPE_E{
     CMD_RQ_FCOUNT,
     CMD_RQ_CONFIG,
     CMD_SET_CONFIG,
+    CMD_RQ_PEERLIST,
+    CMD_RQ_PEERCOUNT,
 };
 
-enum RESP_TYPE_E{
-    RESP_NONE = 0,
-    RESP_PONG,
-    RESP_FRAME,
-    RESP_POINTS,
-    RESP_FCOUNT,
-    RESP_CONFIG,
-    RESP_ERROR,
+enum RSP_TYPE_E{
+    RSP_NONE = 0,
+    RSP_PONG,
+    RSP_FRAME,
+    RSP_POINTS,
+    RSP_FCOUNT,
+    RSP_CONFIG,
+    RSP_ERROR,
+    RSP_ESPNET_ERROR,
+    RSP_PEERLIST,
+    RSP_PEERCOUNT,
 };
 
 //-----------------------------------------------------------------------------

@@ -7,6 +7,7 @@
 #include "esp_now.h"
 #include "WiFi.h"
 #include "tracker.h"
+#include "command_handler.h"
 
 #define LED_BUILTIN 33
 
@@ -18,8 +19,8 @@ espnet_config_t espnet_config;
 espnet_config_t peer_list[MAX_PEERS];
 uint32_t peers_last_response[MAX_PEERS];
 uint8_t numof_peers;
-uint8_t device_id;
-esp_now_peer_info_t peer_info;
+
+static esp_now_peer_info_t peer_info;
 
 //-----------------------------------------------------------------------------
 void espnet_init(){
@@ -96,6 +97,35 @@ void espnet_task(){
   delay(1);
 }
 
+
+//-----------------------------------------------------------------------------
+// Send data to 
+void espnet_send(uint8_t id, uint8_t *data, uint32_t len){
+  for(uint8_t i = 0; i < numof_peers; i++){
+    if(peer_list[i].id == id){
+      esp_err_t res = esp_now_send(peer_list[i].mac, data, len);
+      //...
+      if(res != ESP_OK){
+        serial_send_slip(RSP_ESPNET_ERROR);
+        serial_send_slip(res);
+        serial_end_slip();
+      } 
+      break;
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+// Check if the id is already in the peer list
+uint8_t espnet_check_id(uint8_t id){
+  for(uint8_t i = 0; i < numof_peers; i++){
+    if(peer_list[i].id == id){
+      return 1;
+    }
+  }
+  return 0;
+}
+
 //-----------------------------------------------------------------------------
 void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
   ESPNET_PACKETS tag = (ESPNET_PACKETS)data[0];
@@ -139,6 +169,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
           peer_list[numof_peers].id = numof_peers + 1;
           memcpy(peer_list[numof_peers].mac, addr, 6);
           peer_list[numof_peers].mode = MODE_CLIENT;
+          peers_last_response[numof_peers] = millis();
           uint8_t packet[] = {PACKET_RSP_JOIN, peer_list[numof_peers].id};
           esp_now_send(addr, packet, sizeof(packet));
           numof_peers++;
@@ -204,10 +235,25 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_REQ_FCOUNT:
     {
       if(espnet_config.mode == MODE_CLIENT){
-        uint8_t *packet = (uint8_t*)malloc(9);
+        uint8_t *packet = (uint8_t*)malloc(10);
         packet[0] = PACKET_RSP_FCOUNT;
-        memcpy(packet+1, &tracker_frame_count, 8);
-        esp_now_send(addr, packet, 9);
+        packet[1] = espnet_config.id;
+        memcpy(packet+2, &tracker_frame_count, 8);
+        esp_now_send(addr, packet, 10);
+        free(packet);
+      }
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_RSP_FCOUNT:
+    {
+      uint8_t rq_from = data[0];
+      if(espnet_config.mode == MODE_HOST){
+        uint8_t *packet = (uint8_t*)malloc(10);
+        packet[0] = RSP_FCOUNT;
+        packet[1] = rq_from;
+        memcpy(packet+2, &data[1], 8);
+        serial_send_slip(packet, 10);
+        serial_end_slip();
         free(packet);
       }
     }break;

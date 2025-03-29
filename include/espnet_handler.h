@@ -1,6 +1,8 @@
 #ifndef ESPNET_HANDLER_H
 #define ESPNET_HANDLER_H
 
+#include <Arduino.h>
+
 #define MAX_PEERS 5
 #define ESPNET_TIMEOUT_SEARCH 3000
 #define ESPNET_TIMEOUT_PING 1000
@@ -39,13 +41,15 @@ struct espnet_config_t{
     uint8_t host_mac[6]; 
 };
 
+extern espnet_config_t espnet_config;
 extern espnet_config_t peer_list[MAX_PEERS];
 extern uint8_t numof_peers;
-extern uint8_t device_id;
 
 //-----------------------------------------------------------------------------
 void espnet_init();
 void espnet_task();
-
+void espnet_send(uint8_t id, uint8_t *data, uint32_t len);
+uint8_t espnet_check_id(uint8_t id);
+    
 
 #endif

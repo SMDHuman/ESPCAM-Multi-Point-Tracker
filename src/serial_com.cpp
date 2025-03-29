@@ -22,7 +22,7 @@ void serial_init(){
 //-----------------------------------------------------------------------------
 // Handle serial communication tasks, including reading and processing commands
 void serial_task(){
-  if(Serial.available()){
+  while(Serial.available()){
     slip_push(rx_slip_buffer, Serial.read()); 
   }
   if(slip_is_ready(rx_slip_buffer)){
