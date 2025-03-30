@@ -52,7 +52,7 @@ void espnet_task(void * pvParameters ){
   while(1){
     // Searching for host
     if(espnet_config.mode == MODE_SEARCHING){
-      if(millis() - last_search > 500){
+      if(millis() - last_search > ESPNET_SEARCH_INTERVAL){
         if(search_start == -1){
           search_start = millis();
         }
@@ -86,7 +86,7 @@ void espnet_task(void * pvParameters ){
           numof_peers--;
         }
         // Send ping to peers that haven't responded for a while
-        if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_PING){
+        else if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_PING){
           uint8_t packet[] = {PACKET_REQ_PING};
           esp_now_send(peer_list[i].mac, packet, sizeof(packet));
         }
@@ -198,6 +198,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       if(data[0] > 0){
         espnet_config.id = data[0];
         espnet_config.mode = MODE_CLIENT;
+        espnet_config.last_response = millis();
         memcpy(espnet_config.host_mac, addr, 6);
         // add peer
         memcpy(peer_info.peer_addr, addr, 6);

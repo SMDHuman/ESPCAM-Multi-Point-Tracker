@@ -142,7 +142,7 @@ class Tracker_Interface(Protocol):
         Args:
             frm (int): The frame number to get the points from. Default is 0.
         Returns:
-            list[tuple[int, int, int, int]]: The points from the tracker.
+            list[tuple[int, int, int, int]]: The points as [x1, y1, x2, y2] rectangles from the tracker.
             If the points are not available, returns an empty list.
         """
         self.slip_send(self.CMD["CMD_RQ_POINTS"])
@@ -164,19 +164,53 @@ class Tracker_Interface(Protocol):
             return []
 
 if(__name__ == "__main__"):
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
     # Example usage
     tracker = Tracker_Interface("COM3")
     print("Tracker interface initialized")
     time.sleep(1)
-    print("peer list: ", tracker.get_peer_list())
-    while True:
-        print("-"*80)
-        peer_count = tracker.get_peer_count()
 
-        print("peer count: ", peer_count)
-        for i in range(peer_count+1):
-            print(f" |-----------------")
-            print(f" | peer #{i} ")
-            print("  +-total frames: ", tracker.get_frame_count(i))
-            print("  +-points: ", tracker.get_points(i))
-        time.sleep(0.5)
+    plt.ion()  # Enable interactive mode
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 240)  # ESP32-CAM typical resolution
+    ax.set_ylim(176, 0)  # Inverted Y-axis for image coordinates
+
+    try:
+        while plt.fignum_exists(fig.number):  # Check if figure window exists
+            print("-"*80)
+            peer_count = tracker.get_peer_count()
+            print("peer count: ", peer_count)
+            print("peer list: ", tracker.get_peer_list())
+
+            ax.clear()
+            ax.set_xlim(0, 320)
+            ax.set_ylim(240, 0)
+            # Keep track of which peers we've already labeled
+            labeled_peers = set()
+
+            for i in range(peer_count+1):
+                print(f" |-----------------")
+                print(f" | peer #{i} ")
+                print("  +-total frames: ", tracker.get_frame_count(i))
+                points = tracker.get_points(i)
+                print("  +-points: ", points)
+
+                # Draw rectangles for each point
+                for rect in points:
+                    x1, y1, x2, y2 = rect
+                    width = x2 - x1
+                    height = y2 - y1
+                    # Only add label if this peer hasn't been labeled yet
+                    label = f'Peer {i}' if i not in labeled_peers else ""
+                    ax.add_patch(Rectangle((x1, y1), width, height, 
+                                fill=False, color=f'C{i}', 
+                                label=label))
+                    labeled_peers.add(i)
+
+            ax.legend()
+            plt.draw()
+            plt.pause(0.5)
+    except KeyboardInterrupt:
+        plt.close(fig)
