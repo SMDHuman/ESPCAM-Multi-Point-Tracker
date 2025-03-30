@@ -1,106 +1,182 @@
 import serial
+from serial.threaded import ReaderThread, Protocol
 import time, os, sys, struct
+import queue
+import serial.threaded
 from enum_parser import enum_parser
 from pyslip import SLIP
+from mac_type import MAC
 
-checksum = 0
-def slip_send_byte(serial: serial.Serial, data: int):
-    global checksum
-    checksum += data + 1
-    slip_send(serial, data)
+class Tracker_Interface(Protocol):
+    def _self_(self):
+        return self
 
-def slip_send_bytes(serial: serial.Serial, data: bytes|list[int]):
-    global checksum
-    for byte in data:
-        checksum += byte + 1
-        slip_send(serial, byte)
+    def __init__(self, port: str, baudrate: int = 115200, timeout: int = 1):
+        # import the enums from the header file
+        path = os.path.join(sys.path[0], "..", "include", "command_handler.h")
+        with open(path) as f:
+            enums = enum_parser(f.read())
+        self.CMD = enums["CMD_TYPE_E"]
+        self.RSP = enums["RSP_TYPE_E"]
 
-def slip_send(serial: serial.Serial, byte: int):
-    if(byte == SLIP.END):
-        serial.write(bytes([SLIP.ESC, SLIP.ESC_END]))
-    elif(byte == SLIP.ESC):
-        serial.write(bytes([SLIP.ESC, SLIP.ESC_ESC]))
-    else:
-        serial.write(bytes([byte]))
+        # Initialize the SLIP protocol and serial port
+        self.slip = SLIP()
+        self.checksum = 0
+        self.esp = serial.Serial(port, baudrate = baudrate, timeout=timeout)
+        self.esp_thread = ReaderThread(self.esp, self._self_)
+        self.esp_thread.start()
+        self.rx_buffer = queue.Queue(1)
 
-def slip_end(serial: serial.Serial):
-    global checksum
-    checksum %= 2**32
-    slip_send(serial, checksum & 0xFF)
-    slip_send(serial, (checksum >> 8) & 0xFF)
-    slip_send(serial, (checksum >> 16) & 0xFF)
-    slip_send(serial, (checksum >> 24) & 0xFF)
-    checksum = 0
-    serial.write(bytes([SLIP.END]))
+    # Called when data is received By Serial.ReaderThread
+    def data_received(self, data: bytes):
+        for byte in data:
+            self.slip.push(byte)
+            #...
+            if(self.slip.in_wait() > 0):
+                packet = self.slip.get()
+                self.handle_response(packet)
 
+    def slip_send(self, data: int|bytes|bytearray|list[int], check_checksum: bool = True):
+        if(isinstance(data, bytes) or isinstance(data, list) or isinstance(data, bytearray)):
+            for byte in data:
+                self.slip_send(byte)
+        elif(isinstance(data, int)):
+            self.checksum += (data + 1)*check_checksum
+            if(data == SLIP.END):
+                self.esp.write(bytes([SLIP.ESC, SLIP.ESC_END]))
+            elif(data == SLIP.ESC):
+                self.esp.write(bytes([SLIP.ESC, SLIP.ESC_ESC]))
+            else:
+                self.esp.write(bytes([data]))
+        self.checksum %= 2**32
 
-last_fcount = [0]*255
-last_fcount_time = [0]*255
-def handle_response(packet: bytes):
-    global last_fcount, last_fcount_time
-    tag = packet[0]
-    data = packet[1:]
-    if tag == RSP["RSP_PONG"]:
-        print("Ping response received")
-    elif tag == RSP["RSP_FCOUNT"]:
-        frm = data[0]
-        fcount = struct.unpack("Q", data[1:])[0]
-        #print(f"Fcount from '{data[0]}': ", fcount)
-        print(f"FPS from {data[0]}: {(fcount - last_fcount[frm])/(time.time() - last_fcount_time[frm]):.2f}")
-        last_fcount[frm] = fcount
-        last_fcount_time[frm] = time.time()
-    elif tag == RSP["RSP_PEERCOUNT"]:
-        peer_count = data[0]
-        print(f"Peer count: {peer_count}")
-    elif tag == RSP["RSP_PEERLIST"]:
-        peer_count = len(data) // 7
-        peer_list = []
-        for i in range(peer_count):
-            peer_info = struct.unpack("B6B", data[i*7:(i+1)*7])
-            peer_list.append(peer_info)
-        print(f"Peer list: {peer_list}")
-    else:
-        print("Unknown response received: ", hex(tag))
-        print("Data: ", data.hex())
+    def slip_end(self):
+        self.slip_send(self.checksum & 0xFF, False)
+        self.slip_send((self.checksum >> 8) & 0xFF, False)
+        self.slip_send((self.checksum >> 16) & 0xFF, False)
+        self.slip_send((self.checksum >> 24) & 0xFF, False)
+        self.checksum = 0
+        self.esp.write(bytes([SLIP.END]))
 
-# import the enums from the header file
-path = os.path.join(sys.path[0], "..", "include", "command_handler.h")
-with open(path) as f:
-    enums = enum_parser(f.read())
-CMD = enums["CMD_TYPE_E"]
-RSP = enums["RSP_TYPE_E"]
+    def handle_response(self, packet: bytes):
+        if(len(packet) == 0): return
+        tag = packet[0]
+        data = packet[1:]
+        self.rx_buffer.put((tag, data))
 
-slip = SLIP()
+    def pop_rx_buffer(self, timeout: int = 0.2) -> tuple[int, bytes]:
+        """Pop the next response from the RX buffer.
+        Returns:
+            tuple[int, bytes]: The tag and data of the response.
+        """
+        try:
+            return self.rx_buffer.get(timeout=timeout)
+        except queue.Empty:
+            return None, None
 
-esp = serial.Serial("COM3", 115200, timeout=1)
-esp.flush()
-
-last_ping = 0
-esp_read_start = 0
-while(1):
-    esp_read_start = time.time()
-    while(esp.in_waiting > 0 and time.time() - esp_read_start < 1):
-        byte = esp.read(1)[0]
-        #print("Byte: ", byte)
-        slip.push(byte)
-        while(slip.in_wait() > 0):
-            packate = slip.get()
-            handle_response(packate)
-            slip.reset_buffer()
-        time.sleep(0.001)
-
-    if(time.time() - last_ping > 1):
-        # Send a ping command to the ESP32
-        #slip_send_bytes(esp, [CMD["CMD_RQ_POINTS"], 0])
-        #slip_end(esp)
-        #slip_send_bytes(esp, [CMD["CMD_RQ_PEERLIST"]])
-        #slip_end(esp)
-        if(int(time.time())%2 == 0):
-            slip_send_bytes(esp, [CMD["CMD_RQ_FCOUNT"], 1])
-            slip_end(esp)
+    #--------------------------------------------------------------------------
+    # Command functions
+    #--------------------------------------------------------------------------
+    def get_frame_count(self, frm: int = 0) -> int:
+        """Get the frame count from the tracker.
+        Args:
+            frm (int): The frame number to get the count from. Default is 0."
+            "Returns:"
+            "int: The frame count from the tracker."
+            "If the frame count is not available, returns -1."
+        """
+        self.slip_send(self.CMD["CMD_RQ_FCOUNT"])
+        self.slip_send(frm)
+        self.slip_end()
+        #...
+        tag, data = self.pop_rx_buffer()
+        #...
+        if(tag == self.RSP["RSP_FCOUNT"]):
+            rsp_frm = data[0]
+            if(rsp_frm != frm): return -1
+            fcount = struct.unpack("Q", data[1:])[0]
+            return fcount
         else:
-            slip_send_bytes(esp, [CMD["CMD_RQ_FCOUNT"], 0])
-            slip_end(esp)
-        last_ping = time.time()
-    
-    time.sleep(0.001)
+            return -1
+    #--------------------------------------------------------------------------
+    def get_peer_count(self) -> int:
+        """Get the peer count from the tracker.
+        Returns:
+            int: The peer count from the tracker.
+            If the peer count is not available, returns -1.
+        """
+        self.slip_send(self.CMD["CMD_RQ_PEERCOUNT"])
+        self.slip_end()
+        #...
+        tag, data = self.pop_rx_buffer()
+        #...
+        if(tag == self.RSP["RSP_PEERCOUNT"]):
+            peer_count = data[0]
+            return peer_count
+        else:
+            return -1
+    #--------------------------------------------------------------------------
+    def get_peer_list(self) -> list[tuple[int, MAC]]:
+        """Get the peer list from the tracker.
+        Returns:
+            list[tuple[int, bytes]]: The peer list from the tracker.
+            If the peer list is not available, returns an empty list.
+        """
+        self.slip_send(self.CMD["CMD_RQ_PEERLIST"])
+        self.slip_end()
+        #...
+        tag, data = self.pop_rx_buffer()
+        #...
+        if(tag == self.RSP["RSP_PEERLIST"]):
+            peer_count = len(data) // 7
+            peer_list = []
+            for i in range(peer_count):
+                peer_info = struct.unpack("B6B", data[i*7:(i+1)*7])
+                peer_list.append((peer_info[0], MAC(peer_info[1:])))
+            return peer_list
+        else:
+            return []
+    #--------------------------------------------------------------------------
+    def get_points(self, frm: int = 0) -> list[tuple[int, int, int, int]]:
+        """Get the points from the tracker.
+        Args:
+            frm (int): The frame number to get the points from. Default is 0.
+        Returns:
+            list[tuple[int, int, int, int]]: The points from the tracker.
+            If the points are not available, returns an empty list.
+        """
+        self.slip_send(self.CMD["CMD_RQ_POINTS"])
+        self.slip_send(frm)
+        self.slip_end()
+        #...
+        tag, data = self.pop_rx_buffer()
+        #...
+        if(tag == self.RSP["RSP_POINTS"]):
+            if(data[0] != frm):
+                return []
+            point_count = (len(data)-1) // 16
+            points = []
+            for i in range(point_count):
+                point_info = struct.unpack("4I", data[1+i*16:1+(i+1)*16])
+                points.append(point_info)
+            return points
+        else:
+            return []
+
+if(__name__ == "__main__"):
+    # Example usage
+    tracker = Tracker_Interface("COM3")
+    print("Tracker interface initialized")
+    time.sleep(1)
+    print("peer list: ", tracker.get_peer_list())
+    while True:
+        print("-"*80)
+        peer_count = tracker.get_peer_count()
+
+        print("peer count: ", peer_count)
+        for i in range(peer_count+1):
+            print(f" |-----------------")
+            print(f" | peer #{i} ")
+            print("  +-total frames: ", tracker.get_frame_count(i))
+            print("  +-points: ", tracker.get_points(i))
+        time.sleep(0.5)

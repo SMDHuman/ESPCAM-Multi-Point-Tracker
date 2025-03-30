@@ -66,5 +66,25 @@ void CMD_parse(uint8_t *msg_data, uint32_t len){
       serial_end_slip();
       free(packet);
     }break;
+    case CMD_RQ_POINTS:
+    {
+      uint8_t rq_from = data[0];
+      if(rq_from == 0){
+        uint8_t *packet = (uint8_t*)malloc(2+tracker_points_len*sizeof(point_rect_t));
+        packet[0] = RSP_POINTS;
+        packet[1] = 0;
+        for(uint8_t i = 0; i < tracker_points_len; i++){
+          memcpy(packet+2+i*sizeof(point_rect_t), &tracker_points_rect[i], sizeof(point_rect_t));
+        }
+        serial_send_slip(packet, 2+tracker_points_len*sizeof(point_rect_t));
+        serial_end_slip();
+        free(packet);
+      }else{
+        if(espnet_check_id(rq_from)){
+          uint8_t pck[1] = {PACKET_REQ_POINTS};
+          espnet_send(rq_from, pck, 1);
+        }
+      }
+    }break;
   }
 }

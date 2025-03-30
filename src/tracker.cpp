@@ -123,10 +123,10 @@ static void dilate_buffer(){
 
 //-----------------------------------------------------------------------------
 static void flood_buffer(){
-  uint8_t island_count = 1;
+  uint8_t island_count = 0;
   for(size_t i = 0; i < TRACKER_BUF_LEN; i++){
     if(tracker_buffer_A[i] == 255){
-      flood_fill(i, island_count);
+      flood_fill(i, island_count+1);
       island_count++;
       if(island_count == 255){
         return;

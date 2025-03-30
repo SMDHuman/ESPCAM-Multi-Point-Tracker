@@ -9,7 +9,6 @@
 #include "tracker.h"
 #include "command_handler.h"
 
-#define LED_BUILTIN 33
 
 //-----------------------------------------------------------------------------
 void espnow_recv_cb(const uint8_t *mac, const uint8_t *data, int len);
@@ -17,7 +16,6 @@ void espnow_recv_cb(const uint8_t *mac, const uint8_t *data, int len);
 const uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 espnet_config_t espnet_config;
 espnet_config_t peer_list[MAX_PEERS];
-uint32_t peers_last_response[MAX_PEERS];
 uint8_t numof_peers;
 
 static esp_now_peer_info_t peer_info;
@@ -80,7 +78,7 @@ void espnet_task(void * pvParameters ){
     if(espnet_config.mode == MODE_HOST){
       for(uint8_t i = 0; i < numof_peers; i++){
         // Remove peers that haven't responded for a while
-        if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_CONLOST){
+        if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_CONLOST){
           esp_now_del_peer(peer_list[i].mac);
           for(uint8_t j = i; j < numof_peers - 1; j++){
             peer_list[j] = peer_list[j + 1];
@@ -88,10 +86,19 @@ void espnet_task(void * pvParameters ){
           numof_peers--;
         }
         // Send ping to peers that haven't responded for a while
-        if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_PING){
+        if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_PING){
           uint8_t packet[] = {PACKET_REQ_PING};
           esp_now_send(peer_list[i].mac, packet, sizeof(packet));
         }
+      }
+    }
+
+    // Check for lost connection to host
+    if(espnet_config.mode == MODE_CLIENT){
+      if(millis() - espnet_config.last_response > ESPNET_TIMEOUT_CONLOST){
+        espnet_config.mode = MODE_SEARCHING;
+        search_start = -1;
+        esp_now_del_peer(espnet_config.host_mac);
       }
     }
 
@@ -137,17 +144,20 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
   if(espnet_config.mode == MODE_HOST){
     for(uint8_t i = 0; i < numof_peers; i++){
       if(memcmp(peer_list[i].mac, addr, 6) == 0){
-        peers_last_response[i] = millis();
+        peer_list[i].last_response = millis();
         break;
       }
     }
+  }
+  if(espnet_config.mode == MODE_CLIENT){
+    espnet_config.last_response = millis();
   }
   //...
   switch (tag){
     //-------------------------------------------------------------------------
     case PACKET_REQ_PING:
     {
-      uint8_t packet[] = {PACKET_RSP_PONG};
+      uint8_t packet[] = {PACKET_RSP_PONG, espnet_config.id};
       esp_now_send(addr, packet, sizeof(packet));
     }break;
     case PACKET_REQ_LEDTOGGLE:
@@ -171,7 +181,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
           peer_list[numof_peers].id = numof_peers + 1;
           memcpy(peer_list[numof_peers].mac, addr, 6);
           peer_list[numof_peers].mode = MODE_CLIENT;
-          peers_last_response[numof_peers] = millis();
+          peer_list[numof_peers].last_response = millis();
           uint8_t packet[] = {PACKET_RSP_JOIN, peer_list[numof_peers].id};
           esp_now_send(addr, packet, sizeof(packet));
           numof_peers++;
@@ -228,9 +238,20 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     {
       uint8_t *packet = (uint8_t*)malloc(sizeof(point_rect_t)*tracker_points_len+2);
       packet[0] = PACKET_RSP_POINTS;
-      packet[1] = tracker_points_len;
+      packet[1] = espnet_config.id;
       memcpy(packet+2, tracker_points_rect, sizeof(point_rect_t)*tracker_points_len);
       esp_now_send(addr, packet, sizeof(point_rect_t)*tracker_points_len+2);
+      free(packet);
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_RSP_POINTS:
+    {
+      uint8_t *packet = (uint8_t*)malloc(2+len-1);
+      packet[0] = RSP_POINTS;
+      packet[1] = data[0];
+      memcpy(packet+2, data+1, len-1);
+      serial_send_slip(packet, 2+len-1);
+      serial_end_slip();
       free(packet);
     }break;
     //-------------------------------------------------------------------------

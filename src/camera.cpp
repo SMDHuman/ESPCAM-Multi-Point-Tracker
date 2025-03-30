@@ -4,6 +4,7 @@
 #include "camera.h"
 #include "serial_com.h"
 #include "tracker.h"
+#include "espnet_handler.h"
 
 //-----------------------------------------------------------------------------
 void camera_init(){
@@ -27,7 +28,9 @@ void camera_task(void * pvParameters){
       vTaskDelay(100);
       continue;
     }
-
+    if(espnet_config.mode == MODE_CLIENT){
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
     tracker_push_camera_buffer(fb);
     tracker_process();
 

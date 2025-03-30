@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+#define LED_BUILTIN 33
+
 #define MAX_PEERS 5
 #define ESPNET_TIMEOUT_SEARCH 3000
 #define ESPNET_TIMEOUT_PING 1000
@@ -39,6 +41,7 @@ struct espnet_config_t{
     ESPNET_MODES mode;
     uint8_t mac[6]; 
     uint8_t host_mac[6]; 
+    uint32_t last_response;
 };
 
 extern espnet_config_t espnet_config;
