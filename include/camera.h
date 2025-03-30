@@ -49,7 +49,7 @@ extern uint64_t camera_height;
 
 //-----------------------------------------------------------------------------
 void camera_init();
-void camera_task();
+void camera_task(void * pvParameters);
 
 //-----------------------------------------------------------------------------
 #endif

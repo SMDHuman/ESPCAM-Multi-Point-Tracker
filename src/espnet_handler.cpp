@@ -48,53 +48,55 @@ void espnet_init(){
 }
 
 //-----------------------------------------------------------------------------
-void espnet_task(){
+void espnet_task(void * pvParameters ){
   static uint32_t last_search = millis();
   static int32_t search_start = -1;
-  // Searching for host
-  if(espnet_config.mode == MODE_SEARCHING){
-    if(millis() - last_search > 500){
-      if(search_start == -1){
-        search_start = millis();
-      }
-      if((millis() - search_start > ESPNET_TIMEOUT_SEARCH)){
-        espnet_config.mode = MODE_HOST;
-        for(uint8_t i = 0; i < 3; i++){
+  while(1){
+    // Searching for host
+    if(espnet_config.mode == MODE_SEARCHING){
+      if(millis() - last_search > 500){
+        if(search_start == -1){
+          search_start = millis();
+        }
+        if((millis() - search_start > ESPNET_TIMEOUT_SEARCH)){
+          espnet_config.mode = MODE_HOST;
+          for(uint8_t i = 0; i < 3; i++){
+            digitalWrite(LED_BUILTIN, !HIGH);
+            delay(100);
+            digitalWrite(LED_BUILTIN, !LOW);
+            delay(100);
+          }
           digitalWrite(LED_BUILTIN, !HIGH);
-          delay(100);
-          digitalWrite(LED_BUILTIN, !LOW);
-          delay(100);
         }
-        digitalWrite(LED_BUILTIN, !HIGH);
-      }
-      else{
-        uint8_t packet[] = {PACKET_REQ_JOIN};
-        esp_now_send(broadcast_mac, packet, sizeof(packet));
-      }
-      last_search = millis();
-    }
-  }
-
-  // Check for lost connections
-  if(espnet_config.mode == MODE_HOST){
-    for(uint8_t i = 0; i < numof_peers; i++){
-      // Remove peers that haven't responded for a while
-      if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_CONLOST){
-        esp_now_del_peer(peer_list[i].mac);
-        for(uint8_t j = i; j < numof_peers - 1; j++){
-          peer_list[j] = peer_list[j + 1];
+        else{
+          uint8_t packet[] = {PACKET_REQ_JOIN};
+          esp_now_send(broadcast_mac, packet, sizeof(packet));
         }
-        numof_peers--;
-      }
-      // Send ping to peers that haven't responded for a while
-      if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_PING){
-        uint8_t packet[] = {PACKET_REQ_PING};
-        esp_now_send(peer_list[i].mac, packet, sizeof(packet));
+        last_search = millis();
       }
     }
-  }
 
-  delay(1);
+    // Check for lost connections
+    if(espnet_config.mode == MODE_HOST){
+      for(uint8_t i = 0; i < numof_peers; i++){
+        // Remove peers that haven't responded for a while
+        if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_CONLOST){
+          esp_now_del_peer(peer_list[i].mac);
+          for(uint8_t j = i; j < numof_peers - 1; j++){
+            peer_list[j] = peer_list[j + 1];
+          }
+          numof_peers--;
+        }
+        // Send ping to peers that haven't responded for a while
+        if(millis() - peers_last_response[i] > ESPNET_TIMEOUT_PING){
+          uint8_t packet[] = {PACKET_REQ_PING};
+          esp_now_send(peer_list[i].mac, packet, sizeof(packet));
+        }
+      }
+    }
+
+    vTaskDelay(1);
+  }
 }
 
 

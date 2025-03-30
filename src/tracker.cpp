@@ -4,6 +4,7 @@
 #include "tracker.h"
 #include "camera.h"
 #include "serial_com.h"
+#include <freertos/queue.h>
 
 //#define DEBUG
 //-----------------------------------------------------------------------------
@@ -32,19 +33,17 @@ void tracker_init(){
   //tracker_old_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
 }
 //-----------------------------------------------------------------------------
-void tracker_task(){
-  if(tracker_status == READY){
-    tracker_status = PROCESS;
-    //...
-    filter_buffer();
-    erode_buffer();
-    dilate_buffer();
-    flood_buffer();
-    locate_rect_buffer();
-    //...
-    tracker_status = WAIT;
-    tracker_frame_count++;
-  }
+void tracker_task(void * pvParameters){
+}
+//-----------------------------------------------------------------------------
+void tracker_process(){
+  filter_buffer();
+  erode_buffer();
+  dilate_buffer(); 
+  flood_buffer();
+  locate_rect_buffer();
+      
+  tracker_frame_count++;
 }
 //-----------------------------------------------------------------------------
 // Pushes camera frame buffer to tracker buffer 'A'

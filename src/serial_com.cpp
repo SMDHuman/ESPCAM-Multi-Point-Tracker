@@ -21,17 +21,21 @@ void serial_init(){
 
 //-----------------------------------------------------------------------------
 // Handle serial communication tasks, including reading and processing commands
-void serial_task(){
-  while(Serial.available()){
-    slip_push(rx_slip_buffer, Serial.read()); 
-  }
-  if(slip_is_ready(rx_slip_buffer)){
-    size_t package_len = slip_get_size(rx_slip_buffer);
-    uint8_t *package = slip_get_buffer(rx_slip_buffer);
-    CMD_parse(package, package_len);
-    slip_reset(rx_slip_buffer);
+void serial_task(void * pvParameters){
+  while(1){
+    while(Serial.available()){
+      slip_push(rx_slip_buffer, Serial.read()); 
+    }
+    if(slip_is_ready(rx_slip_buffer)){
+      size_t package_len = slip_get_size(rx_slip_buffer);
+      uint8_t *package = slip_get_buffer(rx_slip_buffer);
+      CMD_parse(package, package_len);
+      slip_reset(rx_slip_buffer);
+    }
+    vTaskDelay(1);
   }
 }
+
 //-----------------------------------------------------------------------------
 // Send a byte using the SLIP protocol
 void serial_send_slip(uint8_t data){

@@ -41,7 +41,8 @@ extern point_rect_t tracker_points_rect[254];
 
 //-----------------------------------------------------------------------------
 void tracker_init();
-void tracker_task();
+void tracker_task(void * pvParameters);
+void tracker_process();
 void tracker_render_frame(size_t w, size_t h, pixformat_t pfmt, uint8_t *buf, size_t len);
 void tracker_push_camera_buffer(camera_fb_t *fb);
 

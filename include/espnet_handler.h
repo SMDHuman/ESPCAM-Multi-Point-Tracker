@@ -47,7 +47,7 @@ extern uint8_t numof_peers;
 
 //-----------------------------------------------------------------------------
 void espnet_init();
-void espnet_task();
+void espnet_task(void * pvParameters);
 void espnet_send(uint8_t id, uint8_t *data, uint32_t len);
 uint8_t espnet_check_id(uint8_t id);
     

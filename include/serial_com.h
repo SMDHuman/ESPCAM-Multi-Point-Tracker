@@ -12,9 +12,10 @@
 
 //-----------------------------------------------------------------------------
 void serial_init();
-void serial_task();
+void serial_task(void * pvParameters);
 void serial_send_slip(uint8_t* buf, size_t len);
 void serial_send_slip(uint8_t data);
+void serial_send_slip(uint8_t *data, uint32_t len);
 void serial_send_slip(uint data);
 void serial_send_slip(int data);
 void serial_send_slip(char data);

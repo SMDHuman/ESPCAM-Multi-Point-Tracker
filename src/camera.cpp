@@ -6,13 +6,6 @@
 #include "tracker.h"
 
 //-----------------------------------------------------------------------------
-capture_mode_e camera_capture_mode = ONESHOT;
-bool camera_trigger;
-uint64_t fb_log_last;
-uint64_t camera_width;
-uint64_t camera_height;
-
-//-----------------------------------------------------------------------------
 void camera_init(){
   esp_err_t err = esp_camera_init(&camera_config);
   if(err == -1){
@@ -24,24 +17,21 @@ void camera_init(){
   s->set_special_effect(s, 2); 
 }
 //-----------------------------------------------------------------------------
-void camera_task(){
-  uint64_t task_start = millis();
-  static uint64_t last_camera_report;
-  //...
-  camera_fb_t *fb = esp_camera_fb_get(); // get fresh image
-  camera_width = fb->width;
-  camera_height = fb->height;
-  //...
-  if(!fb){
-    Serial.println("Couldn't get frame buffer!");
-    return;
-  }
-  //...
-  if(tracker_status == WAIT){
+void camera_task(void * pvParameters){
+  while(1) {
+    uint64_t task_start = millis();
+    camera_fb_t *fb = esp_camera_fb_get(); // get fresh image
+    
+    if(!fb){
+      Serial.println("Couldn't get frame buffer!");
+      vTaskDelay(100);
+      continue;
+    }
+
     tracker_push_camera_buffer(fb);
-    tracker_status = READY;
+    tracker_process();
+
+    esp_camera_fb_return(fb);
+    vTaskDelay(1);
   }
-  //...
-  esp_camera_fb_return(fb);
-  uint64_t task_end = millis();
 }
