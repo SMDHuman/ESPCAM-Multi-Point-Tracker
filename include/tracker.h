@@ -1,5 +1,5 @@
 //-----------------------------------------------------------------------------
-//
+// tracker.h
 //-----------------------------------------------------------------------------
 #ifndef TRACKER_H
 #define TRACKER_H
@@ -7,16 +7,17 @@
 //-----------------------------------------------------------------------------
 #include <Arduino.h>
 #include "esp_camera.h"
+#include "config_handler.h"
 
 #define TRACKER_WIDTH 240
 #define TRACKER_HEIGHT 176
 #define TRACKER_BUF_LEN TRACKER_WIDTH*TRACKER_HEIGHT
 
-#define TRACKER_FILTER_MIN 230
-#define TRACKER_ERODE 3
-#define TRACKER_ERODE_RATIO 3
-#define TRACKER_ERODE_RATIO_DIV 5
-#define TRACKER_DILATE 6
+#define TRACKER_FILTER_MIN      CONFIGS.getInt("trk_filter_min")
+#define TRACKER_ERODE           CONFIGS.getInt("trk_erode")
+#define TRACKER_ERODE_RATIO     CONFIGS.getInt("trk_erode_mul")
+#define TRACKER_ERODE_RATIO_DIV CONFIGS.getInt("trk_erode_div")
+#define TRACKER_DILATE          CONFIGS.getInt("trk_dilate")
 
 //-----------------------------------------------------------------------------
 struct point_rect_t{

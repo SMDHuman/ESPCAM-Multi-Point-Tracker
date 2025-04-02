@@ -27,10 +27,22 @@ uint8_t tracker_points_len = 0;
 point_rect_t tracker_points_rect[254];
 tracker_status_e tracker_status = WAIT;
 
+static uint32_t filter_min;
+static uint32_t erode;
+static uint32_t erode_mul;
+static uint32_t erode_div;
+static uint32_t dilate;
+
 //-----------------------------------------------------------------------------
 void tracker_init(){
   //tracker_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
   //tracker_old_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
+  filter_min = TRACKER_FILTER_MIN;
+  erode = TRACKER_ERODE;
+  erode_mul = TRACKER_ERODE_RATIO;
+  erode_div = TRACKER_ERODE_RATIO_DIV;
+  dilate = TRACKER_DILATE;
+
 }
 //-----------------------------------------------------------------------------
 void tracker_task(void * pvParameters){
@@ -63,7 +75,7 @@ static void filter_buffer(){
   //uint8_t buffer_B[TRACKER_BUF_LEN];
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   for(size_t i = 0; i < TRACKER_BUF_LEN; i++){
-    if(tracker_buffer_A[i] < TRACKER_FILTER_MIN){
+    if(tracker_buffer_A[i] < filter_min){
       buffer_B[i] = 0x00;
     }else{
       buffer_B[i] = 0xFF;
@@ -79,21 +91,21 @@ static void erode_buffer(){
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   memset(buffer_B, 0, TRACKER_BUF_LEN);
   //...
-  static const uint16_t area = (TRACKER_ERODE*2+1)*(TRACKER_ERODE*2+1); 
-  for(size_t y = 0; y < TRACKER_HEIGHT-(TRACKER_ERODE*2); y++){
-    for(size_t x = 0; x < TRACKER_WIDTH-(TRACKER_ERODE*2); x++){
+  static const uint16_t area = (erode*2+1)*(erode*2+1); 
+  for(size_t y = 0; y < TRACKER_HEIGHT-(erode*2); y++){
+    for(size_t x = 0; x < TRACKER_WIDTH-(erode*2); x++){
       //...
       uint16_t count = 0;
-      for(size_t dy = 0; dy < TRACKER_ERODE*2+1; dy++){
-        for(size_t dx = 0; dx < TRACKER_ERODE*2+1; dx++){
+      for(size_t dy = 0; dy < erode*2+1; dy++){
+        for(size_t dx = 0; dx < erode*2+1; dx++){
           if(tracker_buffer_A[((y+dy)*TRACKER_WIDTH)+(x+dx)] == 0xFF){
             count ++;
           }
       }}
-      if(area*TRACKER_ERODE_RATIO <= count*TRACKER_ERODE_RATIO_DIV){
-        buffer_B[((y+TRACKER_ERODE)*TRACKER_WIDTH)+(x+TRACKER_ERODE)] = 0xFF;
+      if(area*erode_mul <= count*erode_div){
+        buffer_B[((y+erode)*TRACKER_WIDTH)+(x+erode)] = 0xFF;
       }else{
-        buffer_B[((y+TRACKER_ERODE)*TRACKER_WIDTH)+(x+TRACKER_ERODE)] = 0x0;
+        buffer_B[((y+erode)*TRACKER_WIDTH)+(x+erode)] = 0x0;
       }
   }}
   //...
@@ -106,12 +118,12 @@ static void dilate_buffer(){
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   memset(buffer_B, 0, TRACKER_BUF_LEN);
   //...
-  for(size_t y = 0; y < TRACKER_HEIGHT-(TRACKER_DILATE*2); y++){
-    for(size_t x = 0; x < TRACKER_WIDTH-(TRACKER_DILATE*2); x++){
+  for(size_t y = 0; y < TRACKER_HEIGHT-(dilate*2); y++){
+    for(size_t x = 0; x < TRACKER_WIDTH-(dilate*2); x++){
       //...
-      if(tracker_buffer_A[((y+TRACKER_DILATE)*TRACKER_WIDTH)+(x+TRACKER_DILATE)] == 0xFF){
-        for(size_t dy = 0; dy < TRACKER_DILATE*2+1; dy++){
-          for(size_t dx = 0; dx < TRACKER_DILATE*2+1; dx++){
+      if(tracker_buffer_A[((y+dilate)*TRACKER_WIDTH)+(x+dilate)] == 0xFF){
+        for(size_t dy = 0; dy < dilate*2+1; dy++){
+          for(size_t dx = 0; dx < dilate*2+1; dx++){
             buffer_B[((y+dy)*TRACKER_WIDTH)+(x+dx)] = 0xFF;
         }}
       }
