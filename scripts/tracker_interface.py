@@ -162,6 +162,33 @@ class Tracker_Interface(Protocol):
             return points
         else:
             return []
+    def set_config(self, **configs) -> bool:
+        """Set the configuration of the tracker.
+        Args:
+            configs (dict): The configuration to set.
+            config_restore_default,    Default = false;
+            camera_brightness,         Default = 0;      // -2 to 2
+            camera_contrast,           Default = 0;      // -2 to 2
+            camera_saturation,         Default = 0;      // -2 to 2
+            camera_special_effect,     Default = 2;      // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
+            camera_whitebal,           Default = 1;      // 0 = disable , 1 = enable
+            camera_awb_gain,           Default = 1;      // 0 = disable , 1 = enable
+            camera_wb_mode,            Default = 0;      // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
+            camera_exposure_ctrl,      Default = 1;      // 0 = disable , 1 = enable
+            camera_aec2,               Default = 0;      // 0 = disable , 1 = enable
+            camera_ae_level,           Default = 0;      // -2 to 2
+            led_blink_delay,           Default = 250;
+            tracker_filter_low,        Default = 235;
+            tracker_erode,             Default = 1;
+            tracker_erode_mul,         Default = 3;
+            tracker_erode_div,         Default = 10;
+            tracker_dilate,            Default = 5;
+            serial_tx_package_size,    Default = 1024;
+            serial_baudrate,           Default = 921600;
+        Returns:
+            bool: True if the configuration was set successfully, False otherwise.
+        """
+        return(True)
 
 if(__name__ == "__main__"):
     import matplotlib.pyplot as plt
