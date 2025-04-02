@@ -36,6 +36,7 @@ class Tracker_Interface(Protocol):
                 packet = self.slip.get()
                 self.handle_response(packet)
 
+    # Sends data to the ESP32-CAM using SLIP protocol
     def slip_send(self, data: int|bytes|bytearray|list[int], check_checksum: bool = True):
         if(isinstance(data, bytes) or isinstance(data, list) or isinstance(data, bytearray)):
             for byte in data:
@@ -50,6 +51,8 @@ class Tracker_Interface(Protocol):
                 self.esp.write(bytes([data]))
         self.checksum %= 2**32
 
+    # Sends the end of the SLIP packet
+    # and the checksum to the ESP32-CAM
     def slip_end(self):
         self.slip_send(self.checksum & 0xFF, False)
         self.slip_send((self.checksum >> 8) & 0xFF, False)
@@ -57,7 +60,9 @@ class Tracker_Interface(Protocol):
         self.slip_send((self.checksum >> 24) & 0xFF, False)
         self.checksum = 0
         self.esp.write(bytes([SLIP.END]))
-
+    
+    # Handles the response from the ESP32-CAM
+    # and puts it in the RX buffer
     def handle_response(self, packet: bytes):
         if(len(packet) == 0): return
         tag = packet[0]
@@ -163,6 +168,9 @@ class Tracker_Interface(Protocol):
         else:
             return []
 
+# --------------------------------------------------------------------------
+# Example usage with matplotlib
+# --------------------------------------------------------------------------
 if(__name__ == "__main__"):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
