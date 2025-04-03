@@ -246,7 +246,7 @@ if(__name__ == "__main__"):
     from matplotlib.patches import Rectangle
 
     # Example usage
-    tracker = Tracker_Interface("COM3")
+    tracker = Tracker_Interface("COM6")
     print("Tracker interface initialized")
     time.sleep(0.5)
     

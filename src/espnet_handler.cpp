@@ -114,11 +114,11 @@ void espnet_send(ESPNET_PACKETS tag, uint8_t id, uint8_t *data, uint32_t len){
       memcpy(packet+2, data, len);
       esp_err_t res = esp_now_send(peer_config.mac, packet, 2+len);
       //...
-      if(res != ESP_OK){
-        serial_send_slip(CMD_RSP_ESPNET_ERROR);
-        serial_send_slip(res);
-        serial_end_slip();
-      } 
+      //if(res != ESP_OK){
+      //  serial_send_slip(CMD_RSP_ESPNET_ERROR);
+      //  serial_send_slip(res);
+      //  serial_end_slip();
+      //} 
       return;
     }
   }
