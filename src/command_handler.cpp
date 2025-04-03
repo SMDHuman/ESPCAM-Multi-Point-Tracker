@@ -42,8 +42,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         free(packet);
       }else{
         if(espnet_check_id(rq_from)){
-          uint8_t pck[1] = {PACKET_REQ_FCOUNT};
-          espnet_send(rq_from, pck, 1);
+          espnet_send(PACKET_REQ_FCOUNT, rq_from, {}, 0);
         }
       }
     }break;
@@ -85,8 +84,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         free(packet);
       }else{
         if(espnet_check_id(rq_from)){
-          uint8_t pck[1] = {PACKET_REQ_POINTS};
-          espnet_send(rq_from, pck, 1);
+          espnet_send(PACKET_REQ_POINTS, rq_from, {}, 0);
         }
       }
     }break;
@@ -123,10 +121,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         }
       }else{
         if(espnet_check_id(rq_from)){
-          uint8_t *packet = (uint8_t*)malloc(1+len);
-          packet[0] = PACKET_REQ_CONFIG;
-          memcpy(packet+1, data, len);
-          espnet_send(rq_from, packet, 1+len);
+          espnet_send(PACKET_REQ_CONFIG, rq_from, data, len);
         }
       }
     }break;
@@ -152,10 +147,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         }
       }else{
         if(espnet_check_id(rq_from)){
-          uint8_t *packet = (uint8_t*)malloc(1+len);
-          packet[0] = PACKET_SET_CONFIG;
-          memcpy(packet+1, data, len);
-          espnet_send(rq_from, packet, 1+len);
+          espnet_send(PACKET_SET_CONFIG, rq_from, data, len);
         }
       }
     }break;

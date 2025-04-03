@@ -67,15 +67,15 @@ void espnet_task(void * pvParameters ){
           digitalWrite(LED_BUILTIN, !HIGH);
         }
         else{
-          uint8_t packet[] = {PACKET_REQ_JOIN};
-          esp_now_send(broadcast_mac, packet, sizeof(packet));
+          uint8_t packet[2] = {PACKET_REQ_JOIN, 0};
+          esp_now_send(broadcast_mac, packet, 2);
         }
         last_search = millis();
       }
     }
 
     // Check for lost connections
-    if(espnet_config.mode == MODE_HOST){
+    if(espnet_config.mode == MODE_HOST || espnet_config.mode == MODE_CLIENT){
       for(uint8_t i = 0; i < peer_list->length; i++){
         // Remove peers that haven't responded for a while
         espnet_config_t peer_config;
@@ -85,19 +85,9 @@ void espnet_task(void * pvParameters ){
           array_remove(peer_list, i);
         }
         // Send ping to peers that haven't responded for a while
-        else if(millis() - peer_config.last_response > ESPNET_TIMEOUT_PING){
-          uint8_t packet[] = {PACKET_REQ_PING};
-          esp_now_send(peer_config.mac, packet, sizeof(packet));
+        else if((millis() - peer_config.last_response > ESPNET_TIMEOUT_PING) && (espnet_config.mode == MODE_HOST)){
+          espnet_send(PACKET_REQ_PING, peer_config.id);
         }
-      }
-    }
-
-    // Check for lost connection to host
-    if(espnet_config.mode == MODE_CLIENT){
-      if(millis() - espnet_config.last_response > ESPNET_TIMEOUT_CONLOST){
-        espnet_config.mode = MODE_SEARCHING;
-        search_start = -1;
-        esp_now_del_peer(espnet_config.host_mac);
       }
     }
 
@@ -107,20 +97,29 @@ void espnet_task(void * pvParameters ){
 
 
 //-----------------------------------------------------------------------------
-// Send data to 
-void espnet_send(uint8_t id, uint8_t *data, uint32_t len){
+// Send data to a peer
+void espnet_send(ESPNET_PACKETS tag, uint8_t id){
+  espnet_send(tag, id, {}, 0);
+}
+// Send data to a peer
+void espnet_send(ESPNET_PACKETS tag, uint8_t id, uint8_t *data, uint32_t len){
+  if(len > 250) return;
   for(uint8_t i = 0; i < peer_list->length; i++){
     espnet_config_t peer_config;
     array_get(peer_list, i, &peer_config);
     if(peer_config.id == id){
-      esp_err_t res = esp_now_send(peer_config.mac, data, len);
+      uint8_t packet[2+len];
+      packet[0] = tag;
+      packet[1] = espnet_config.id;
+      memcpy(packet+2, data, len);
+      esp_err_t res = esp_now_send(peer_config.mac, packet, 2+len);
       //...
       if(res != ESP_OK){
         serial_send_slip(CMD_RSP_ESPNET_ERROR);
         serial_send_slip(res);
         serial_end_slip();
       } 
-      break;
+      return;
     }
   }
 }
@@ -140,30 +139,30 @@ uint8_t espnet_check_id(uint8_t id){
 
 //-----------------------------------------------------------------------------
 void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
+  // Check if the packet is for us
+  if(len < 2) return;
   ESPNET_PACKETS tag = (ESPNET_PACKETS)data[0];
-  data ++;
-  len --;
+  uint8_t from_id = data[1];
+  data += 2;
+  len -= 2;
   // Update last response times
-  if(espnet_config.mode == MODE_HOST){
-    for(uint8_t i = 0; i < peer_list->length; i++){
-      espnet_config_t peer_config;
-      array_get(peer_list, i, &peer_config);
-      if(memcmp(peer_config.mac, addr, 6) == 0){
-        peer_config.last_response = millis();
-        break;
-      }
+  for(uint8_t i = 0; i < peer_list->length; i++){
+    espnet_config_t peer_config;
+    array_get(peer_list, i, &peer_config);
+    if(peer_config.id == from_id){
+      peer_config.last_response = millis();
+      array_set(peer_list, i, &peer_config);
+      break;
     }
   }
-  if(espnet_config.mode == MODE_CLIENT){
-    espnet_config.last_response = millis();
-  }
+  //Serial.printf("ESP-NET: %02X:%02X:%02X:%02X:%02X:%02X -> %d\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+  //Serial.printf("ESP-NET: %d -> %d\n", from_id, tag);
   //...
   switch (tag){
     //-------------------------------------------------------------------------
     case PACKET_REQ_PING:
     {
-      uint8_t packet[] = {PACKET_RSP_PONG, espnet_config.id};
-      esp_now_send(addr, packet, sizeof(packet));
+      espnet_send(PACKET_RSP_PONG, from_id, {}, 0);
     }break;
     case PACKET_REQ_LEDTOGGLE:
     {
@@ -190,78 +189,55 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
           memcpy(peer_config.mac, addr, 6);
           peer_config.mode = MODE_CLIENT;
           peer_config.last_response = millis();
-          uint8_t packet[] = {PACKET_RSP_JOIN, peer_config.id};
-          esp_now_send(addr, packet, sizeof(packet));
           array_push(peer_list, &peer_config);
+          //...
+          uint8_t packet[3] = {PACKET_RSP_JOIN_ACCEPT, espnet_config.id, peer_config.id};
+          esp_now_send(addr, packet, 3);
         }
         else{
-          uint8_t packet[] = {PACKET_RSP_JOIN, 0};
-          esp_now_send(addr, packet, sizeof(packet));
+          uint8_t packet[2] = {PACKET_RSP_JOIN_DENY, espnet_config.id};
+          esp_now_send(addr, packet, 2);
         }
       }
     }break;
     //-------------------------------------------------------------------------
-    case PACKET_RSP_JOIN:
+    case PACKET_RSP_JOIN_ACCEPT:
     {
-      if(data[0] > 0){
-        espnet_config.id = data[0];
-        espnet_config.mode = MODE_CLIENT;
-        espnet_config.last_response = millis();
-        memcpy(espnet_config.host_mac, addr, 6);
-        // add peer
-        memcpy(peer_info.peer_addr, addr, 6);
-        peer_info.channel = 0;
-        peer_info.encrypt = false;
-        esp_now_add_peer(&peer_info);
-      }
-      else{
-        espnet_config.mode = MODE_NONE;
-      }
+      espnet_config.id = data[0];
+      espnet_config.mode = MODE_CLIENT;
+      // add peer
+      memcpy(peer_info.peer_addr, addr, 6);
+      peer_info.channel = 0;
+      peer_info.encrypt = false;
+      esp_now_add_peer(&peer_info);
+      //...
+      espnet_config_t peer_config;
+      peer_config.id = 0;
+      memcpy(peer_config.mac, addr, 6);
+      peer_config.mode = MODE_CLIENT;
+      peer_config.last_response = millis();
+      array_push(peer_list, &peer_config);
     }break;
     //-------------------------------------------------------------------------
-    case PACKET_REQ_LEAVE:
+    case PACKET_RSP_JOIN_DENY:
     {
-      if(espnet_config.mode == MODE_HOST){
-        for(uint8_t i = 0; i < peer_list->length; i++){
-          espnet_config_t peer_config;
-          array_get(peer_list, i, &peer_config);
-          if(memcmp(peer_config.mac, addr, 6) == 0){
-            esp_now_del_peer(peer_config.mac);
-            for(uint8_t j = i; j < peer_list->length - 1; j++){
-              peer_list[j] = peer_list[j + 1];
-            }
-            peer_list->length--;
-            break;
-          }
-        }
-        uint8_t packet[] = {PACKET_RSP_LEAVE};
-        esp_now_send(addr, packet, sizeof(packet));
-      }
-      if(espnet_config.mode == MODE_CLIENT){
-        espnet_config.mode = MODE_NONE;
-        memset(espnet_config.host_mac, 0, 6);
-        uint8_t packet[] = {PACKET_RSP_LEAVE};
-        esp_now_send(addr, packet, sizeof(packet));
-      }
+      espnet_config.mode = MODE_NONE;
     }break;
     //-------------------------------------------------------------------------
     case PACKET_REQ_POINTS:
     {
-      uint8_t *packet = (uint8_t*)malloc(sizeof(point_rect_t)*tracker_points_len+2);
-      packet[0] = PACKET_RSP_POINTS;
-      packet[1] = espnet_config.id;
-      memcpy(packet+2, tracker_points_rect, sizeof(point_rect_t)*tracker_points_len);
-      esp_now_send(addr, packet, sizeof(point_rect_t)*tracker_points_len+2);
-      free(packet);
+      if(espnet_config.mode == MODE_CLIENT){
+        espnet_send(PACKET_RSP_POINTS, from_id, (uint8_t*)tracker_points_rect, sizeof(point_rect_t)*tracker_points_len);  
+      }
     }break;
     //-------------------------------------------------------------------------
     case PACKET_RSP_POINTS:
     {
-      uint8_t *packet = (uint8_t*)malloc(2+len-1);
+      uint8_t *packet = (uint8_t*)malloc(2+len);
       packet[0] = CMD_RSP_POINTS;
-      packet[1] = data[0];
-      memcpy(packet+2, data+1, len-1);
-      serial_send_slip(packet, 2+len-1);
+      packet[1] = from_id;
+      memcpy(packet+2, data, len);
+      serial_send_slip(packet, 2+len);
       serial_end_slip();
       free(packet);
     }break;
@@ -269,23 +245,17 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_REQ_FCOUNT:
     {
       if(espnet_config.mode == MODE_CLIENT){
-        uint8_t *packet = (uint8_t*)malloc(10);
-        packet[0] = PACKET_RSP_FCOUNT;
-        packet[1] = espnet_config.id;
-        memcpy(packet+2, &tracker_frame_count, 8);
-        esp_now_send(addr, packet, 10);
-        free(packet);
+        espnet_send(PACKET_RSP_FCOUNT, from_id, (uint8_t*)&tracker_frame_count, 8);
       }
     }break;
     //-------------------------------------------------------------------------
     case PACKET_RSP_FCOUNT:
     {
-      uint8_t rq_from = data[0];
       if(espnet_config.mode == MODE_HOST){
-        uint8_t *packet = (uint8_t*)malloc(10);
+        uint8_t *packet = (uint8_t*)malloc(8);
         packet[0] = CMD_RSP_FCOUNT;
-        packet[1] = rq_from;
-        memcpy(packet+2, &data[1], 8);
+        packet[1] = from_id;
+        memcpy(packet+2, data, 8);
         serial_send_slip(packet, 10);
         serial_end_slip();
         free(packet);
@@ -295,11 +265,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_REQ_ESPNET_CONFIG:
     {
       if(espnet_config.mode == MODE_CLIENT){
-        uint8_t *packet = (uint8_t*)malloc(sizeof(espnet_config)+1);
-        packet[0] = PACKET_RSP_ESPNET_CONFIG;
-        memcpy(packet+1, &espnet_config, sizeof(espnet_config));
-        esp_now_send(addr, packet, sizeof(espnet_config)+1);
-        free(packet);
+        espnet_send(PACKET_RSP_ESPNET_CONFIG, from_id, (uint8_t*)&espnet_config, sizeof(espnet_config));
       }
     }break;
     //-------------------------------------------------------------------------
@@ -315,21 +281,14 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       char req_key[16] = {0};
       memcpy(req_key, data, len);
       if(CONFIGS.isKey(req_key)){
-        uint8_t *packet = (uint8_t*)malloc(2+len+4);
+        uint8_t *packet = (uint8_t*)malloc(len+4);
         uint32_t value = CONFIGS.getInt(req_key);
-        packet[0] = PACKET_RSP_CONFIG;
-        packet[1] = espnet_config.id;
-        memcpy(packet+2, req_key, len);
-        memcpy(packet+2+len, &value, 4);
-        esp_now_send(addr, packet, 2+len+4);
+        memcpy(packet, req_key, len);
+        memcpy(packet+len, &value, 4);
+        espnet_send(PACKET_RSP_CONFIG, from_id, packet, len+4);
         free(packet);
       }else{
-        uint8_t *packet = (uint8_t*)malloc(2+len);
-        packet[0] = PACKET_RSP_ERROR;
-        packet[1] = espnet_config.id;
-        memcpy(packet+2, req_key, len);
-        esp_now_send(addr, packet, 2+len);
-        free(packet);
+        espnet_send(PACKET_RSP_ERROR, from_id, (uint8_t*)req_key, len);
       }
     }
     //-------------------------------------------------------------------------
@@ -337,6 +296,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     {
       if(espnet_config.mode == MODE_HOST){
         serial_send_slip((uint8_t)CMD_RSP_CONFIG);
+        serial_send_slip(from_id);
         serial_send_slip((uint8_t *)data, len);
         serial_end_slip();
       }
@@ -350,12 +310,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       if(CONFIGS.isKey(req_key)){
         CONFIGS.putInt(req_key, value);
       }else{
-        uint8_t *packet = (uint8_t*)malloc(2+len-4);
-        packet[0] = PACKET_RSP_ERROR;
-        packet[1] = espnet_config.id;
-        memcpy(packet+2, req_key, len-4);
-        esp_now_send(addr, packet, 2+len-4);
-        free(packet);
+        espnet_send(PACKET_RSP_ERROR, from_id, (uint8_t*)req_key, len);
       }
     }break;
     //-------------------------------------------------------------------------

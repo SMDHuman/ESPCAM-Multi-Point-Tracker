@@ -26,7 +26,8 @@ enum ESPNET_PACKETS: uint8_t{
     PACKET_SET_ESPNET_CONFIG,
     PACKET_RSP_ERROR,
     PACKET_REQ_JOIN,
-    PACKET_RSP_JOIN,
+    PACKET_RSP_JOIN_ACCEPT,
+    PACKET_RSP_JOIN_DENY,
     PACKET_REQ_LEAVE,
     PACKET_RSP_LEAVE,
     PACKET_REQ_CONFIG,
@@ -55,7 +56,8 @@ extern array *peer_list;
 //-----------------------------------------------------------------------------
 void espnet_init();
 void espnet_task(void * pvParameters);
-void espnet_send(uint8_t id, uint8_t *data, uint32_t len);
+void espnet_send(ESPNET_PACKETS tag, uint8_t id, uint8_t *data, uint32_t len);
+void espnet_send(ESPNET_PACKETS tag, uint8_t id);
 uint8_t espnet_check_id(uint8_t id);
     
 

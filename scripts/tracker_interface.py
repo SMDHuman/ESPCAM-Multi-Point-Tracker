@@ -1,6 +1,6 @@
 import serial
 from serial.threaded import ReaderThread, Protocol
-import time, os, sys, struct
+import time, os, sys, struct, datetime
 import queue
 import serial.threaded
 from enum_parser import enum_parser
@@ -63,12 +63,13 @@ class Tracker_Interface(Protocol):
     # Handles the response from the ESP32-CAM
     # and puts it in the RX buffer
     def handle_response(self, packet: bytes):
+        #print(packet)
         if(len(packet) == 0): return
         tag = packet[0]
         data = packet[1:]
         self.rx_buffer.put((tag, data))
 
-    def pop_rx_buffer(self, timeout: int = 0.2) -> tuple[int, bytes]:
+    def pop_rx_buffer(self, timeout: int = 0.3) -> tuple[int, bytes]:
         """Pop the next response from the RX buffer.
         Returns:
             tuple[int, bytes]: The tag and data of the response.
@@ -76,7 +77,15 @@ class Tracker_Interface(Protocol):
         try:
             return self.rx_buffer.get(timeout=timeout)
         except queue.Empty:
+            self.log("!RX Timeout")
             return None, None
+        
+    def log(self, msg: str):
+        hour = datetime.datetime.now().time().hour
+        mint = datetime.datetime.now().time().minute
+        sec = datetime.datetime.now().time().second
+        mill = datetime.datetime.now().time().microsecond % 1000
+        print(f"[{hour:02}:{mint:02}:{sec:02}.{mill:03}] {msg}")
 
     #--------------------------------------------------------------------------
     # Command functions
@@ -237,24 +246,25 @@ if(__name__ == "__main__"):
     from matplotlib.patches import Rectangle
 
     # Example usage
-    tracker = Tracker_Interface("COM6")
+    tracker = Tracker_Interface("COM3")
     print("Tracker interface initialized")
-    time.sleep(1)
+    time.sleep(0.5)
+    
+    print("peer list: ", tracker.get_peer_list())
 
     plt.ion()  # Enable interactive mode
     fig, ax = plt.subplots()
     ax.set_xlim(0, 240)  # ESP32-CAM typical resolution
     ax.set_ylim(176, 0)  # Inverted Y-axis for image coordinates
     
-    for peers in tracker.get_peer_list():
-        tracker.set_config(peers[0],
-                           trk_erode = 1,
-                           trk_erode_mul = 4,
-                           trk_erode_div = 9, 
-                           trk_dilate = 3, 
-                           trk_filter_min = 230)
-    tracker.reboot()
-
+    #for peers in tracker.get_peer_list():
+    #    tracker.set_config(peers[0],
+    #                       trk_erode = 1,
+    #                       trk_erode_mul = 4,
+    #                       trk_erode_div = 9, 
+    #                       trk_dilate = 3, 
+    #                       trk_filter_min = 230)
+    #tracker.reboot()
 
     last_fcount_time = time.time()
     last_fcount = 0
@@ -262,26 +272,26 @@ if(__name__ == "__main__"):
         while plt.fignum_exists(fig.number):  # Check if figure window exists
             #print("-"*80)
             peer_count = tracker.get_peer_count()
-            #print("peer count: ", peer_count)
-            #print("peer list: ", tracker.get_peer_list())
-
+            print("peer count: ", peer_count)
+            print("peer list: ", tracker.get_peer_list())
+            
             ax.clear()
             ax.set_xlim(0, 240)
             ax.set_ylim(176, 0)
             # Keep track of which peers we've already labeled
             labeled_peers = set()
+    
+            fcount = tracker.get_frame_count()
+            current_fps = round((fcount-last_fcount)/(time.time()-last_fcount_time))
+            #print("fps: ", current_fps)
+            ax.set_title(f'FPS: {current_fps}')
+            last_fcount_time = time.time()
+            last_fcount = fcount
 
             for i in range(peer_count+1):
                 #print(f" |-----------------")
                 #print(f" | peer #{i} ")
                 #print("  +-total frames: ", tracker.get_frame_count(i))
-                if(i == 0):
-                    fcount = tracker.get_frame_count(i)
-                    current_fps = round((fcount-last_fcount)/(time.time()-last_fcount_time))
-                    #print("fps: ", current_fps)
-                    ax.set_title(f'FPS: {current_fps}')
-                    last_fcount_time = time.time()
-                    last_fcount = fcount
                 points = tracker.get_points(i)
                 #print("  +-points: ", points)
                 #print(f"id{i} trk_erode:", tracker.get_config("trk_erode", i))
@@ -298,7 +308,7 @@ if(__name__ == "__main__"):
                                 label=label))
                     labeled_peers.add(i)
 
-            ax.legend()
+                ax.legend()
             plt.draw()
             plt.pause(0.1)
     except KeyboardInterrupt:
