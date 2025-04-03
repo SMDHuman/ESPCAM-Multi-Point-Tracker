@@ -2,6 +2,7 @@
 #define ESPNET_HANDLER_H
 
 #include <Arduino.h>
+#include "p_array.h"
 
 #define LED_BUILTIN 33
 
@@ -46,8 +47,7 @@ struct espnet_config_t{
 };
 
 extern espnet_config_t espnet_config;
-extern espnet_config_t peer_list[MAX_PEERS];
-extern uint8_t numof_peers;
+extern array *peer_list;
 
 //-----------------------------------------------------------------------------
 void espnet_init();

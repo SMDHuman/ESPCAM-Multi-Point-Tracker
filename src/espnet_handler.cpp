@@ -9,14 +9,15 @@
 #include "tracker.h"
 #include "command_handler.h"
 
+#define P_ARRAY_IMPLEMENTATION
+#include "p_array.h"
 
 //-----------------------------------------------------------------------------
 void espnow_recv_cb(const uint8_t *mac, const uint8_t *data, int len);
 
 const uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 espnet_config_t espnet_config;
-espnet_config_t peer_list[MAX_PEERS];
-uint8_t numof_peers;
+array *peer_list;
 
 static esp_now_peer_info_t peer_info;
 
@@ -25,6 +26,8 @@ void espnet_init(){
   //...
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, !LOW);
+  //...
+  peer_list = array_create(MAX_PEERS, sizeof(espnet_config_t));
   //...
   WiFi.mode(WIFI_MODE_STA);
   if(esp_now_init() != ESP_OK){
@@ -76,19 +79,18 @@ void espnet_task(void * pvParameters ){
 
     // Check for lost connections
     if(espnet_config.mode == MODE_HOST){
-      for(uint8_t i = 0; i < numof_peers; i++){
+      for(uint8_t i = 0; i < peer_list->length; i++){
         // Remove peers that haven't responded for a while
-        if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_CONLOST){
-          esp_now_del_peer(peer_list[i].mac);
-          for(uint8_t j = i; j < numof_peers - 1; j++){
-            peer_list[j] = peer_list[j + 1];
-          }
-          numof_peers--;
+        espnet_config_t peer_config;
+        array_get(peer_list, i, &peer_config);
+        if(millis() - peer_config.last_response > ESPNET_TIMEOUT_CONLOST){
+          esp_now_del_peer(peer_config.mac);
+          array_remove(peer_list, i);
         }
         // Send ping to peers that haven't responded for a while
-        else if(millis() - peer_list[i].last_response > ESPNET_TIMEOUT_PING){
+        else if(millis() - peer_config.last_response > ESPNET_TIMEOUT_PING){
           uint8_t packet[] = {PACKET_REQ_PING};
-          esp_now_send(peer_list[i].mac, packet, sizeof(packet));
+          esp_now_send(peer_config.mac, packet, sizeof(packet));
         }
       }
     }
@@ -110,9 +112,11 @@ void espnet_task(void * pvParameters ){
 //-----------------------------------------------------------------------------
 // Send data to 
 void espnet_send(uint8_t id, uint8_t *data, uint32_t len){
-  for(uint8_t i = 0; i < numof_peers; i++){
-    if(peer_list[i].id == id){
-      esp_err_t res = esp_now_send(peer_list[i].mac, data, len);
+  for(uint8_t i = 0; i < peer_list->length; i++){
+    espnet_config_t peer_config;
+    array_get(peer_list, i, &peer_config);
+    if(peer_config.id == id){
+      esp_err_t res = esp_now_send(peer_config.mac, data, len);
       //...
       if(res != ESP_OK){
         serial_send_slip(RSP_ESPNET_ERROR);
@@ -127,8 +131,10 @@ void espnet_send(uint8_t id, uint8_t *data, uint32_t len){
 //-----------------------------------------------------------------------------
 // Check if the id is already in the peer list
 uint8_t espnet_check_id(uint8_t id){
-  for(uint8_t i = 0; i < numof_peers; i++){
-    if(peer_list[i].id == id){
+  for(uint8_t i = 0; i < peer_list->length; i++){
+    espnet_config_t peer_config;
+    array_get(peer_list, i, &peer_config);
+    if(peer_config.id == id){
       return 1;
     }
   }
@@ -142,9 +148,11 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
   len -= 1;
   // Update last response times
   if(espnet_config.mode == MODE_HOST){
-    for(uint8_t i = 0; i < numof_peers; i++){
-      if(memcmp(peer_list[i].mac, addr, 6) == 0){
-        peer_list[i].last_response = millis();
+    for(uint8_t i = 0; i < peer_list->length; i++){
+      espnet_config_t peer_config;
+      array_get(peer_list, i, &peer_config);
+      if(memcmp(peer_config.mac, addr, 6) == 0){
+        peer_config.last_response = millis();
         break;
       }
     }
@@ -173,18 +181,21 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_REQ_JOIN:
     {
       if(espnet_config.mode == MODE_HOST){
-        if(numof_peers < MAX_PEERS){
+        if(peer_list->length < MAX_PEERS){
+          //...
           memcpy(peer_info.peer_addr, addr, 6);
           peer_info.channel = 0;
           peer_info.encrypt = false;
           esp_now_add_peer(&peer_info);
-          peer_list[numof_peers].id = numof_peers + 1;
-          memcpy(peer_list[numof_peers].mac, addr, 6);
-          peer_list[numof_peers].mode = MODE_CLIENT;
-          peer_list[numof_peers].last_response = millis();
-          uint8_t packet[] = {PACKET_RSP_JOIN, peer_list[numof_peers].id};
+          //...
+          espnet_config_t peer_config;
+          peer_config.id = peer_list->length+1;
+          memcpy(peer_config.mac, addr, 6);
+          peer_config.mode = MODE_CLIENT;
+          peer_config.last_response = millis();
+          uint8_t packet[] = {PACKET_RSP_JOIN, peer_config.id};
           esp_now_send(addr, packet, sizeof(packet));
-          numof_peers++;
+          array_push(peer_list, &peer_config);
         }
         else{
           uint8_t packet[] = {PACKET_RSP_JOIN, 0};
@@ -214,13 +225,15 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_REQ_LEAVE:
     {
       if(espnet_config.mode == MODE_HOST){
-        for(uint8_t i = 0; i < numof_peers; i++){
-          if(memcmp(peer_list[i].mac, addr, 6) == 0){
-            esp_now_del_peer(peer_list[i].mac);
-            for(uint8_t j = i; j < numof_peers - 1; j++){
+        for(uint8_t i = 0; i < peer_list->length; i++){
+          espnet_config_t peer_config;
+          array_get(peer_list, i, &peer_config);
+          if(memcmp(peer_config.mac, addr, 6) == 0){
+            esp_now_del_peer(peer_config.mac);
+            for(uint8_t j = i; j < peer_list->length - 1; j++){
               peer_list[j] = peer_list[j + 1];
             }
-            numof_peers--;
+            peer_list->length--;
             break;
           }
         }

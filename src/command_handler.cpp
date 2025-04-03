@@ -49,20 +49,22 @@ void CMD_parse(uint8_t *msg_data, uint32_t len){
     {
       uint8_t *packet = (uint8_t*)malloc(2);
       packet[0] = RSP_PEERCOUNT;
-      packet[1] = numof_peers;
+      packet[1] = peer_list->length;
       serial_send_slip(packet, 2);
       serial_end_slip();
       free(packet);
     }break;
     case CMD_RQ_PEERLIST:
     {
-      uint8_t *packet = (uint8_t*)malloc(numof_peers*7+1);
+      uint8_t *packet = (uint8_t*)malloc(peer_list->length*7+1);
       packet[0] = RSP_PEERLIST;
-      for(uint8_t i = 0; i < numof_peers; i++){
-        packet[1+i*7] = peer_list[i].id;
-        memcpy(packet+1+i*7+1, peer_list[i].mac, 6);
+      for(uint8_t i = 0; i < peer_list->length; i++){
+        espnet_config_t peer_config;
+        array_get(peer_list, i, &peer_config);
+        packet[1+i*7] = peer_config.id;
+        memcpy(packet+1+i*7+1, peer_config.mac, 6);
       }
-      serial_send_slip(packet, numof_peers*7+1);
+      serial_send_slip(packet, peer_list->length*7+1);
       serial_end_slip();
       free(packet);
     }break;
