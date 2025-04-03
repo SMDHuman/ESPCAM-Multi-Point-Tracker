@@ -16,8 +16,7 @@ class Tracker_Interface(Protocol):
         path = os.path.join(sys.path[0], "..", "include", "command_handler.h")
         with open(path) as f:
             enums = enum_parser(f.read())
-        self.CMD = enums["CMD_TYPE_E"]
-        self.RSP = enums["RSP_TYPE_E"]
+        self.__dict__.update(enums["CMD_PACKET_TYPE_E"])
 
         # Initialize the SLIP protocol and serial port
         self.slip = SLIP()
@@ -36,6 +35,7 @@ class Tracker_Interface(Protocol):
                 packet = self.slip.get()
                 self.handle_response(packet)
 
+    # Sends data to the ESP32-CAM using SLIP protocol
     def slip_send(self, data: int|bytes|bytearray|list[int], check_checksum: bool = True):
         if(isinstance(data, bytes) or isinstance(data, list) or isinstance(data, bytearray)):
             for byte in data:
@@ -50,6 +50,8 @@ class Tracker_Interface(Protocol):
                 self.esp.write(bytes([data]))
         self.checksum %= 2**32
 
+    # Sends the end of the SLIP packet
+    # and the checksum to the ESP32-CAM
     def slip_end(self):
         self.slip_send(self.checksum & 0xFF, False)
         self.slip_send((self.checksum >> 8) & 0xFF, False)
@@ -57,7 +59,9 @@ class Tracker_Interface(Protocol):
         self.slip_send((self.checksum >> 24) & 0xFF, False)
         self.checksum = 0
         self.esp.write(bytes([SLIP.END]))
-
+    
+    # Handles the response from the ESP32-CAM
+    # and puts it in the RX buffer
     def handle_response(self, packet: bytes):
         if(len(packet) == 0): return
         tag = packet[0]
@@ -85,13 +89,13 @@ class Tracker_Interface(Protocol):
             "int: The frame count from the tracker."
             "If the frame count is not available, returns -1."
         """
-        self.slip_send(self.CMD["CMD_RQ_FCOUNT"])
+        self.slip_send(self.CMD_REQ_FCOUNT)
         self.slip_send(frm)
         self.slip_end()
         #...
         tag, data = self.pop_rx_buffer()
         #...
-        if(tag == self.RSP["RSP_FCOUNT"]):
+        if(tag == self.CMD_RSP_FCOUNT):
             rsp_frm = data[0]
             if(rsp_frm != frm): return -1
             fcount = struct.unpack("Q", data[1:])[0]
@@ -105,12 +109,12 @@ class Tracker_Interface(Protocol):
             int: The peer count from the tracker.
             If the peer count is not available, returns -1.
         """
-        self.slip_send(self.CMD["CMD_RQ_PEERCOUNT"])
+        self.slip_send(self.CMD_REQ_PEERCOUNT)
         self.slip_end()
         #...
         tag, data = self.pop_rx_buffer()
         #...
-        if(tag == self.RSP["RSP_PEERCOUNT"]):
+        if(tag == self.CMD_RSP_PEERCOUNT):
             peer_count = data[0]
             return peer_count
         else:
@@ -122,12 +126,12 @@ class Tracker_Interface(Protocol):
             list[tuple[int, bytes]]: The peer list from the tracker.
             If the peer list is not available, returns an empty list.
         """
-        self.slip_send(self.CMD["CMD_RQ_PEERLIST"])
+        self.slip_send(self.CMD_REQ_PEERLIST)
         self.slip_end()
         #...
         tag, data = self.pop_rx_buffer()
         #...
-        if(tag == self.RSP["RSP_PEERLIST"]):
+        if(tag == self.CMD_RSP_PEERLIST):
             peer_count = len(data) // 7
             peer_list = []
             for i in range(peer_count):
@@ -145,13 +149,13 @@ class Tracker_Interface(Protocol):
             list[tuple[int, int, int, int]]: The points as [x1, y1, x2, y2] rectangles from the tracker.
             If the points are not available, returns an empty list.
         """
-        self.slip_send(self.CMD["CMD_RQ_POINTS"])
+        self.slip_send(self.CMD_REQ_POINTS)
         self.slip_send(frm)
         self.slip_end()
         #...
         tag, data = self.pop_rx_buffer()
         #...
-        if(tag == self.RSP["RSP_POINTS"]):
+        if(tag == self.CMD_RSP_POINTS):
             if(data[0] != frm):
                 return []
             point_count = (len(data)-1) // 16
@@ -162,40 +166,78 @@ class Tracker_Interface(Protocol):
             return points
         else:
             return []
-    def set_config(self, **configs) -> bool:
+    #--------------------------------------------------------------------------
+    def set_config(self, peer_id: int = 0, **configs) -> bool:
         """Set the configuration of the tracker.
         Args:
             configs (dict): The configuration to set.
-            config_restore_default,    Default = false;
-            camera_brightness,         Default = 0;      // -2 to 2
-            camera_contrast,           Default = 0;      // -2 to 2
-            camera_saturation,         Default = 0;      // -2 to 2
-            camera_special_effect,     Default = 2;      // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
-            camera_whitebal,           Default = 1;      // 0 = disable , 1 = enable
-            camera_awb_gain,           Default = 1;      // 0 = disable , 1 = enable
-            camera_wb_mode,            Default = 0;      // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
-            camera_exposure_ctrl,      Default = 1;      // 0 = disable , 1 = enable
-            camera_aec2,               Default = 0;      // 0 = disable , 1 = enable
-            camera_ae_level,           Default = 0;      // -2 to 2
-            led_blink_delay,           Default = 250;
-            tracker_filter_low,        Default = 235;
-            tracker_erode,             Default = 1;
-            tracker_erode_mul,         Default = 3;
-            tracker_erode_div,         Default = 10;
-            tracker_dilate,            Default = 5;
-            serial_tx_package_size,    Default = 1024;
-            serial_baudrate,           Default = 921600;
+            `cfg_restore     = false`;
+            `cam_brightness  = 0` (-2 to 2);
+            `cam_contrast    = 0` (-2 to 2);
+            `cam_saturation  = 0` (-2 to 2);
+            `cam_spec_effect = 2` (0 to 6 [0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia]);
+            `cam_whitebal    = 1` (0 = disable , 1 = enable);
+            `cam_awb_gain    = 1` (0 = disable , 1 = enable);
+            `cam_wb_mode     = 0` (0 to 4 !if awb_gain enabled! [0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home]);
+            `cam_expo_ctrl   = 1` (0 = disable , 1 = enable);
+            `cam_aec2        = 0` (0 = disable , 1 = enable);
+            `cam_ae_level    = 0` (-2 to 2);
+            `trk_filter_min  = 235`;
+            `trk_erode       = 1`;
+            `trk_erode_mul   = 3`;
+            `trk_erode_div   = 10`;
+            `trk_dilate      = 5`;
+            `serial_baudrate = 115200`;
         Returns:
             bool: True if the configuration was set successfully, False otherwise.
         """
-        return(True)
+        success = True
+        for key, value in configs.items():
+            self.slip_send(self.CMD_SET_CONFIG)
+            self.slip_send(peer_id)
+            self.slip_send(key.encode("ascii"))
+            self.slip_send(struct.pack("I", value))
+            self.slip_end()
+            tag, data = self.pop_rx_buffer(0.5)
+            if(tag == self.CMD_RSP_ERROR):
+                print(f"Couln't set `{key}` config")
+                success = False
+        return(success)
+    
+    def get_config(self, key_name: str, peer_id: int = 0) -> int:
+        """Get the configuration of the tracker.
+        Returns:
+            int: The configuration value.
+        """
+        self.slip_send(self.CMD_REQ_CONFIG)
+        self.slip_send(peer_id)
+        self.slip_send(key_name.encode("ascii"))
+        self.slip_end()
+        tag, data = self.pop_rx_buffer()
+        #print(tag, data)
+        
+        if(tag != self.CMD_RSP_CONFIG): return -1
+        if(data[0] != peer_id): return -1
 
+        rsp_key = data[1:-4].decode()
+        if(rsp_key != key_name): return -1
+
+        return struct.unpack("i", data[-4:])[0]
+
+    def reboot(self):
+        """Reboot the ESP32-CAM."""
+        self.slip_send(self.CMD_REBOOT)
+        self.slip_end()
+
+# --------------------------------------------------------------------------
+# Example usage with matplotlib
+# --------------------------------------------------------------------------
 if(__name__ == "__main__"):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
     # Example usage
-    tracker = Tracker_Interface("COM3")
+    tracker = Tracker_Interface("COM6")
     print("Tracker interface initialized")
     time.sleep(1)
 
@@ -203,26 +245,46 @@ if(__name__ == "__main__"):
     fig, ax = plt.subplots()
     ax.set_xlim(0, 240)  # ESP32-CAM typical resolution
     ax.set_ylim(176, 0)  # Inverted Y-axis for image coordinates
+    
+    for peers in tracker.get_peer_list():
+        tracker.set_config(peers[0],
+                           trk_erode = 1,
+                           trk_erode_mul = 4,
+                           trk_erode_div = 9, 
+                           trk_dilate = 3, 
+                           trk_filter_min = 230)
+    tracker.reboot()
 
+
+    last_fcount_time = time.time()
+    last_fcount = 0
     try:
         while plt.fignum_exists(fig.number):  # Check if figure window exists
-            print("-"*80)
+            #print("-"*80)
             peer_count = tracker.get_peer_count()
-            print("peer count: ", peer_count)
-            print("peer list: ", tracker.get_peer_list())
+            #print("peer count: ", peer_count)
+            #print("peer list: ", tracker.get_peer_list())
 
             ax.clear()
-            ax.set_xlim(0, 320)
-            ax.set_ylim(240, 0)
+            ax.set_xlim(0, 240)
+            ax.set_ylim(176, 0)
             # Keep track of which peers we've already labeled
             labeled_peers = set()
 
             for i in range(peer_count+1):
-                print(f" |-----------------")
-                print(f" | peer #{i} ")
-                print("  +-total frames: ", tracker.get_frame_count(i))
+                #print(f" |-----------------")
+                #print(f" | peer #{i} ")
+                #print("  +-total frames: ", tracker.get_frame_count(i))
+                if(i == 0):
+                    fcount = tracker.get_frame_count(i)
+                    current_fps = round((fcount-last_fcount)/(time.time()-last_fcount_time))
+                    #print("fps: ", current_fps)
+                    ax.set_title(f'FPS: {current_fps}')
+                    last_fcount_time = time.time()
+                    last_fcount = fcount
                 points = tracker.get_points(i)
-                print("  +-points: ", points)
+                #print("  +-points: ", points)
+                #print(f"id{i} trk_erode:", tracker.get_config("trk_erode", i))
 
                 # Draw rectangles for each point
                 for rect in points:
@@ -238,6 +300,6 @@ if(__name__ == "__main__"):
 
             ax.legend()
             plt.draw()
-            plt.pause(0.5)
+            plt.pause(0.1)
     except KeyboardInterrupt:
         plt.close(fig)

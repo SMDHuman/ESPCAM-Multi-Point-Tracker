@@ -24,9 +24,6 @@ static esp_now_peer_info_t peer_info;
 //-----------------------------------------------------------------------------
 void espnet_init(){
   //...
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, !LOW);
-  //...
   peer_list = array_create(MAX_PEERS, sizeof(espnet_config_t));
   //...
   WiFi.mode(WIFI_MODE_STA);
@@ -119,7 +116,7 @@ void espnet_send(uint8_t id, uint8_t *data, uint32_t len){
       esp_err_t res = esp_now_send(peer_config.mac, data, len);
       //...
       if(res != ESP_OK){
-        serial_send_slip(RSP_ESPNET_ERROR);
+        serial_send_slip(CMD_RSP_ESPNET_ERROR);
         serial_send_slip(res);
         serial_end_slip();
       } 
@@ -144,8 +141,8 @@ uint8_t espnet_check_id(uint8_t id){
 //-----------------------------------------------------------------------------
 void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
   ESPNET_PACKETS tag = (ESPNET_PACKETS)data[0];
-  data = &data[1];
-  len -= 1;
+  data ++;
+  len --;
   // Update last response times
   if(espnet_config.mode == MODE_HOST){
     for(uint8_t i = 0; i < peer_list->length; i++){
@@ -261,7 +258,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
     case PACKET_RSP_POINTS:
     {
       uint8_t *packet = (uint8_t*)malloc(2+len-1);
-      packet[0] = RSP_POINTS;
+      packet[0] = CMD_RSP_POINTS;
       packet[1] = data[0];
       memcpy(packet+2, data+1, len-1);
       serial_send_slip(packet, 2+len-1);
@@ -286,7 +283,7 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       uint8_t rq_from = data[0];
       if(espnet_config.mode == MODE_HOST){
         uint8_t *packet = (uint8_t*)malloc(10);
-        packet[0] = RSP_FCOUNT;
+        packet[0] = CMD_RSP_FCOUNT;
         packet[1] = rq_from;
         memcpy(packet+2, &data[1], 8);
         serial_send_slip(packet, 10);
@@ -295,21 +292,70 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       }
     }break;
     //-------------------------------------------------------------------------
-    case PACKET_REQ_CONFIG:
+    case PACKET_REQ_ESPNET_CONFIG:
     {
       if(espnet_config.mode == MODE_CLIENT){
         uint8_t *packet = (uint8_t*)malloc(sizeof(espnet_config)+1);
-        packet[0] = PACKET_RSP_CONFIG;
+        packet[0] = PACKET_RSP_ESPNET_CONFIG;
         memcpy(packet+1, &espnet_config, sizeof(espnet_config));
         esp_now_send(addr, packet, sizeof(espnet_config)+1);
         free(packet);
       }
     }break;
     //-------------------------------------------------------------------------
-    case PACKET_SET_CONFIG:
+    case PACKET_SET_ESPNET_CONFIG:
     {
       if(espnet_config.mode == MODE_CLIENT){
         //...
+      }
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_REQ_CONFIG:
+    {
+      char req_key[16] = {0};
+      memcpy(req_key, data, len);
+      if(CONFIGS.isKey(req_key)){
+        uint8_t *packet = (uint8_t*)malloc(2+len+4);
+        uint32_t value = CONFIGS.getInt(req_key);
+        packet[0] = PACKET_RSP_CONFIG;
+        packet[1] = espnet_config.id;
+        memcpy(packet+2, req_key, len);
+        memcpy(packet+2+len, &value, 4);
+        esp_now_send(addr, packet, 2+len+4);
+        free(packet);
+      }else{
+        uint8_t *packet = (uint8_t*)malloc(2+len);
+        packet[0] = PACKET_RSP_ERROR;
+        packet[1] = espnet_config.id;
+        memcpy(packet+2, req_key, len);
+        esp_now_send(addr, packet, 2+len);
+        free(packet);
+      }
+    }
+    //-------------------------------------------------------------------------
+    case PACKET_RSP_CONFIG:
+    {
+      if(espnet_config.mode == MODE_HOST){
+        serial_send_slip((uint8_t)CMD_RSP_CONFIG);
+        serial_send_slip((uint8_t *)data, len);
+        serial_end_slip();
+      }
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_SET_CONFIG:
+    {
+      char req_key[16] = {0};
+      memcpy(req_key, data, len-4);
+      uint32_t value = *(uint32_t*)(data+len-4);
+      if(CONFIGS.isKey(req_key)){
+        CONFIGS.putInt(req_key, value);
+      }else{
+        uint8_t *packet = (uint8_t*)malloc(2+len-4);
+        packet[0] = PACKET_RSP_ERROR;
+        packet[1] = espnet_config.id;
+        memcpy(packet+2, req_key, len-4);
+        esp_now_send(addr, packet, 2+len-4);
+        free(packet);
       }
     }break;
     //-------------------------------------------------------------------------

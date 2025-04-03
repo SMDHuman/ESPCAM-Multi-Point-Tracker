@@ -29,7 +29,7 @@ void serial_task(void * pvParameters){
     if(slip_is_ready(rx_slip_buffer)){
       size_t package_len = slip_get_size(rx_slip_buffer);
       uint8_t *package = slip_get_buffer(rx_slip_buffer);
-      CMD_parse(package, package_len);
+      command_parse(package, package_len);
       slip_reset(rx_slip_buffer);
     }
     vTaskDelay(1);

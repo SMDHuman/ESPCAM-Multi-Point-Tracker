@@ -5,10 +5,10 @@
 #ifndef SERIAL_COM_H
 #define SERIAL_COM_H
 #include <Arduino.h>
+#include "config_handler.h"
 
 //-----------------------------------------------------------------------------
-#define BAUDRATE 115200
-#define S_MAX_PACKAGE 1024
+#define BAUDRATE CONFIGS.getInt("serial_baudrate", 115200)
 
 //-----------------------------------------------------------------------------
 void serial_init();

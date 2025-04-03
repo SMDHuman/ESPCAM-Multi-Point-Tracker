@@ -7,34 +7,31 @@
 #include <Arduino.h>
 
 //-----------------------------------------------------------------------------
-enum CMD_TYPE_E{
+enum CMD_PACKET_TYPE_E{
     CMD_NONE = 0,
-    CMD_PING,
-    CMD_RQ_FRAME,
-    CMD_RQ_POINTS,
-    CMD_RQ_FCOUNT,
-    CMD_RQ_CONFIG,
+    CMD_RSP_ERROR,
+    CMD_RSP_ESPNET_ERROR,
+    CMD_REQ_PING,
+    CMD_RSP_PONG,
+    CMD_REQ_FRAME,
+    CMD_RSP_FRAME,
+    CMD_REQ_POINTS,
+    CMD_RSP_POINTS,
+    CMD_REQ_FCOUNT,
+    CMD_RSP_FCOUNT,
+    CMD_REQ_CONFIG,
+    CMD_RSP_CONFIG,
     CMD_SET_CONFIG,
-    CMD_RQ_PEERLIST,
-    CMD_RQ_PEERCOUNT,
-};
-
-enum RSP_TYPE_E{
-    RSP_NONE = 0,
-    RSP_PONG,
-    RSP_FRAME,
-    RSP_POINTS,
-    RSP_FCOUNT,
-    RSP_CONFIG,
-    RSP_ERROR,
-    RSP_ESPNET_ERROR,
-    RSP_PEERLIST,
-    RSP_PEERCOUNT,
+    CMD_REQ_PEERLIST,
+    CMD_RSP_PEERLIST,
+    CMD_REQ_PEERCOUNT,
+    CMD_RSP_PEERCOUNT,
+    CMD_REBOOT,
 };
 
 //-----------------------------------------------------------------------------
-void CMD_init();
-void CMD_task();
-void CMD_parse(uint8_t *msg_data, uint32_t package_size);
+void command_init();
+void command_task();
+void command_parse(uint8_t *msg_data, uint32_t package_size);
 
 #endif
