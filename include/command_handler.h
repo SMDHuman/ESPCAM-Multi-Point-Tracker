@@ -27,6 +27,8 @@ enum CMD_PACKET_TYPE_E{
     CMD_REQ_PEERCOUNT,
     CMD_RSP_PEERCOUNT,
     CMD_REBOOT,
+    CMD_REQ_RELOAD_CONFIG,
+    CMD_RSP_RELOAD_CONFIG
 };
 
 //-----------------------------------------------------------------------------

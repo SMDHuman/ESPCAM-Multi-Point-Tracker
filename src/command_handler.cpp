@@ -6,7 +6,7 @@
 #include <Arduino.h>
 #include "serial_com.h"
 #include "tracker.h"
-#include "espnet_handler.h"
+#include "espnet.h"
 #include "config_handler.h"
 
 //-----------------------------------------------------------------------------
@@ -41,9 +41,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         serial_end_slip();
         free(packet);
       }else{
-        if(espnet_check_id(rq_from)){
-          espnet_send(PACKET_REQ_FCOUNT, rq_from, {}, 0);
-        }
+        espnet_send(PACKET_REQ_FCOUNT, rq_from, {}, 0);
       }
     }break;
     case CMD_REQ_PEERCOUNT:
@@ -83,9 +81,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         serial_end_slip();
         free(packet);
       }else{
-        if(espnet_check_id(rq_from)){
-          espnet_send(PACKET_REQ_POINTS, rq_from, {}, 0);
-        }
+        espnet_send(PACKET_REQ_POINTS, rq_from, {}, 0);
       }
     }break;
     case CMD_REBOOT:
@@ -120,9 +116,7 @@ void command_parse(uint8_t *msg_data, uint32_t len){
           free(packet);
         }
       }else{
-        if(espnet_check_id(rq_from)){
-          espnet_send(PACKET_REQ_CONFIG, rq_from, data, len);
-        }
+        espnet_send(PACKET_REQ_CONFIG, rq_from, data, len);
       }
     }break;
     case CMD_SET_CONFIG:
@@ -136,6 +130,9 @@ void command_parse(uint8_t *msg_data, uint32_t len){
         uint32_t value = *(uint32_t*)(data+len-4);
         if(CONFIGS.isKey(req_key)){
           CONFIGS.putInt(req_key, value);
+          serial_send_slip(CMD_RSP_CONFIG);
+          serial_send_slip(0);
+          serial_end_slip();
         }else{
           uint8_t *packet = (uint8_t*)malloc(2+len-4);
           packet[0] = CMD_RSP_ERROR;
@@ -146,10 +143,20 @@ void command_parse(uint8_t *msg_data, uint32_t len){
           free(packet);
         }
       }else{
-        if(espnet_check_id(rq_from)){
-          espnet_send(PACKET_SET_CONFIG, rq_from, data, len);
-        }
+        espnet_send(PACKET_SET_CONFIG, rq_from, data, len);
       }
     }break;
+    case CMD_REQ_RELOAD_CONFIG:
+    {
+      uint8_t rq_from = data[0];
+      if(rq_from == 0){
+        config_reload();
+        serial_send_slip((uint8_t)CMD_RSP_RELOAD_CONFIG);
+        serial_send_slip((uint8_t)0);
+        serial_end_slip();
+      }else{
+        espnet_send(PACKET_REQ_RELOAD_CONFIG, rq_from);
+      }
+    }
   } 
 }

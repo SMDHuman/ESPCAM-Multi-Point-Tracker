@@ -2,9 +2,8 @@
 //
 //-----------------------------------------------------------------------------
 #include "tracker.h"
-#include "camera.h"
+#include "camera_handler.h"
 #include "serial_com.h"
-#include <freertos/queue.h>
 
 //#define DEBUG
 //-----------------------------------------------------------------------------
@@ -32,20 +31,24 @@ static uint32_t erode;
 static uint32_t erode_mul;
 static uint32_t erode_div;
 static uint32_t dilate;
+static uint32_t flip_x;
+static uint32_t flip_y;
 
 //-----------------------------------------------------------------------------
 void tracker_init(){
-  //tracker_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
-  //tracker_old_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
-  filter_min = TRACKER_FILTER_MIN;
-  erode = TRACKER_ERODE;
-  erode_mul = TRACKER_ERODE_RATIO;
-  erode_div = TRACKER_ERODE_RATIO_DIV;
-  dilate = TRACKER_DILATE;
-
 }
 //-----------------------------------------------------------------------------
 void tracker_task(void * pvParameters){
+}
+//-----------------------------------------------------------------------------
+void tracker_load_configs(){
+  filter_min = CONFIGS.getInt("trk_filter_min");
+  erode = CONFIGS.getInt("trk_erode");
+  erode_mul = CONFIGS.getInt("trk_erode_mul");
+  erode_div = CONFIGS.getInt("trk_erode_div");
+  dilate = CONFIGS.getInt("trk_dilate");
+  flip_x = CONFIGS.getInt("trk_flip_x");
+  flip_y = CONFIGS.getInt("trk_flip_y");
 }
 //-----------------------------------------------------------------------------
 void tracker_process(){
@@ -61,11 +64,13 @@ void tracker_process(){
 // Pushes camera frame buffer to tracker buffer 'A'
 void tracker_push_camera_buffer(camera_fb_t *fb){
   //switch_buffers();
-  for(size_t y = 0; y < TRACKER_HEIGHT; y++){
-    for(size_t x = 0; x < TRACKER_WIDTH; x++){
-      size_t fb_x = (fb->width * x) / TRACKER_WIDTH;
-      size_t fb_y = (fb->height * y) / TRACKER_HEIGHT;
-      tracker_buffer_A[(y*TRACKER_WIDTH)+x] = fb->buf[(fb_y*fb->width)+fb_x];
+  for(int y = 0; y < TRACKER_HEIGHT; y++){
+    for(int x = 0; x < TRACKER_WIDTH; x++){
+      int fb_x = (fb->width * x) / TRACKER_WIDTH;
+      int fb_y = (fb->height * y) / TRACKER_HEIGHT;
+      int f_x = flip_x ? (TRACKER_WIDTH-x-1) : x;
+      int f_y = flip_y ? (TRACKER_HEIGHT-y-1) : y;
+      tracker_buffer_A[(f_y*TRACKER_WIDTH)+f_x] = fb->buf[(fb_y*fb->width)+fb_x];
     }
   }
 }

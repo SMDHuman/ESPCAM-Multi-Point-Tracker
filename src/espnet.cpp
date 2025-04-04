@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // File: espnow_handler.cpp
 //-----------------------------------------------------------------------------
-#include "espnet_handler.h"
+#include "espnet.h"
 #include <Arduino.h>
 #include "serial_com.h"
 #include "esp_now.h"
@@ -20,6 +20,7 @@ espnet_config_t espnet_config;
 array *peer_list;
 
 static esp_now_peer_info_t peer_info;
+static ESPNET_MODES static_mode = MODE_NONE;
 
 //-----------------------------------------------------------------------------
 void espnet_init(){
@@ -42,7 +43,15 @@ void espnet_init(){
   peer_info.encrypt = false;
   esp_now_add_peer(&peer_info);
   //...
-  espnet_config.mode = MODE_SEARCHING;
+  if(static_mode == MODE_HOST){
+    espnet_config.mode = MODE_HOST;
+  }
+  else{
+    espnet_config.mode = MODE_SEARCHING;
+  }
+  if(static_mode == MODE_SEARCHING){
+    static_mode = MODE_NONE;
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -51,20 +60,24 @@ void espnet_task(void * pvParameters ){
   static int32_t search_start = -1;
   while(1){
     // Searching for host
-    if(espnet_config.mode == MODE_SEARCHING){
+    if((espnet_config.mode == MODE_SEARCHING)){
       if(millis() - last_search > ESPNET_SEARCH_INTERVAL){
         if(search_start == -1){
           search_start = millis();
         }
         if((millis() - search_start > ESPNET_TIMEOUT_SEARCH)){
-          espnet_config.mode = MODE_HOST;
-          for(uint8_t i = 0; i < 3; i++){
+          if(static_mode == MODE_CLIENT){
+            search_start = -1;
+          }else{
+            espnet_config.mode = MODE_HOST;
+            for(uint8_t i = 0; i < 3; i++){
+              digitalWrite(LED_BUILTIN, !HIGH);
+              delay(100);
+              digitalWrite(LED_BUILTIN, !LOW);
+              delay(100);
+            }
             digitalWrite(LED_BUILTIN, !HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, !LOW);
-            delay(100);
           }
-          digitalWrite(LED_BUILTIN, !HIGH);
         }
         else{
           uint8_t packet[2] = {PACKET_REQ_JOIN, 0};
@@ -75,7 +88,7 @@ void espnet_task(void * pvParameters ){
     }
 
     // Check for lost connections
-    if(espnet_config.mode == MODE_HOST || espnet_config.mode == MODE_CLIENT){
+    if((espnet_config.mode == MODE_HOST) || (espnet_config.mode == MODE_CLIENT)){
       for(uint8_t i = 0; i < peer_list->length; i++){
         // Remove peers that haven't responded for a while
         espnet_config_t peer_config;
@@ -94,7 +107,11 @@ void espnet_task(void * pvParameters ){
     vTaskDelay(1);
   }
 }
-
+//-----------------------------------------------------------------------------
+// Load configs for ESP-NOW
+void espnet_load_configs(){
+  static_mode = (ESPNET_MODES)CONFIGS.getInt("espnet_mode", MODE_NONE);
+}
 
 //-----------------------------------------------------------------------------
 // Send data to a peer
@@ -297,7 +314,9 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       if(espnet_config.mode == MODE_HOST){
         serial_send_slip((uint8_t)CMD_RSP_CONFIG);
         serial_send_slip(from_id);
-        serial_send_slip((uint8_t *)data, len);
+        if(len > 0){
+          serial_send_slip((uint8_t*)data, len);
+        }
         serial_end_slip();
       }
     }break;
@@ -309,9 +328,23 @@ void espnow_recv_cb(const uint8_t *addr, const uint8_t *data, int len){
       uint32_t value = *(uint32_t*)(data+len-4);
       if(CONFIGS.isKey(req_key)){
         CONFIGS.putInt(req_key, value);
+        espnet_send(PACKET_RSP_CONFIG, from_id);
       }else{
         espnet_send(PACKET_RSP_ERROR, from_id, (uint8_t*)req_key, len);
       }
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_REQ_RELOAD_CONFIG:
+    {
+      config_reload();
+      espnet_send(PACKET_RSP_RELOAD_CONFIG, from_id);
+    }break;
+    //-------------------------------------------------------------------------
+    case PACKET_RSP_RELOAD_CONFIG:
+    {
+      serial_send_slip((uint8_t)CMD_RSP_RELOAD_CONFIG);
+      serial_send_slip(from_id);
+      serial_end_slip();
     }break;
     //-------------------------------------------------------------------------
     default:

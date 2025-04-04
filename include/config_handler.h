@@ -31,5 +31,6 @@ const String CONFIGS_KEYS[] = {
 
 void config_init();
 void config_task();
+void config_reload();
 
 #endif

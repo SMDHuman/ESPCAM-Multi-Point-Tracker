@@ -4,7 +4,10 @@
 #include <Arduino.h>
 #include "config_handler.h"
 #include <Preferences.h>
-#include "espnet_handler.h"
+#include "espnet.h"
+#include "serial_com.h"
+#include "tracker.h"
+#include "camera_handler.h"
 
 Preferences CONFIGS;
 
@@ -30,7 +33,10 @@ void config_init(){
     CONFIGS.putInt("trk_erode_mul", 3);
     CONFIGS.putInt("trk_erode_div", 5);
     CONFIGS.putInt("trk_dilate", 6);
+    CONFIGS.putInt("trk_flip_x", 0);
+    CONFIGS.putInt("trk_flip_y", 0);
     CONFIGS.putInt("serial_baudrate", 115200);
+    CONFIGS.putInt("espnet_mode", MODE_NONE);
     
     // Blink led 5 times
     for(uint8_t i = 0; i < 5; i++){
@@ -40,9 +46,15 @@ void config_init(){
       delay(100);
     }
   }
-
 }
 //-----------------------------------------------------------------------------
 void config_task(){
+}
 
+//-----------------------------------------------------------------------------
+void config_reload(){
+  tracker_load_configs();
+  camera_load_configs();
+  espnet_load_configs();
+  serial_load_configs();
 }

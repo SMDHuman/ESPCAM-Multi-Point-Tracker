@@ -15,7 +15,8 @@ static uint8_t rx_slip_buffer[2028];
 //-----------------------------------------------------------------------------
 // Initialize the serial communication with the specified baud rate
 void serial_init(){
-  Serial.begin(BAUDRATE);
+  uint32_t baudrate = CONFIGS.getInt("serial_baudrate", 115200);
+  Serial.begin(baudrate);
   slip_init(rx_slip_buffer, sizeof(rx_slip_buffer));
 }
 
@@ -34,6 +35,11 @@ void serial_task(void * pvParameters){
     }
     vTaskDelay(1);
   }
+}
+
+//-----------------------------------------------------------------------------
+void serial_load_configs(){
+
 }
 
 //-----------------------------------------------------------------------------
