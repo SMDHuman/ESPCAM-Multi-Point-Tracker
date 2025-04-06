@@ -42,16 +42,6 @@ void espnet_init(){
   peer_info.channel = 0;
   peer_info.encrypt = false;
   esp_now_add_peer(&peer_info);
-  //...
-  if(static_mode == MODE_HOST){
-    espnet_config.mode = MODE_HOST;
-  }
-  else{
-    espnet_config.mode = MODE_SEARCHING;
-  }
-  if(static_mode == MODE_SEARCHING){
-    static_mode = MODE_NONE;
-  }
 }
 
 //-----------------------------------------------------------------------------
@@ -111,6 +101,17 @@ void espnet_task(void * pvParameters ){
 // Load configs for ESP-NOW
 void espnet_load_configs(){
   static_mode = (ESPNET_MODES)CONFIGS.getInt("espnet_mode", MODE_NONE);
+  //...
+  if(static_mode == MODE_HOST){
+    espnet_config.mode = MODE_HOST;
+    digitalWrite(LED_BUILTIN, !HIGH);
+  }
+  else{
+    espnet_config.mode = MODE_SEARCHING;
+  }
+  if(static_mode == MODE_SEARCHING){
+    static_mode = MODE_NONE;
+  }
 }
 
 //-----------------------------------------------------------------------------

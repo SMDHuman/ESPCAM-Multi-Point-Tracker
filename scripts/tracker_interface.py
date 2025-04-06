@@ -34,13 +34,13 @@ class Tracker_Interface(Protocol):
       #...
       if(self.slip.in_wait() > 0):
         packet = self.slip.get()
-        self.handle_response(packet)
+        self._handle_response(packet)
 
   # Sends data to the ESP32-CAM using SLIP protocol
-  def slip_send(self, data: int|bytes|bytearray|list[int], check_checksum: bool = True):
+  def _slip_send(self, data: int|bytes|bytearray|list[int], check_checksum: bool = True):
     if(isinstance(data, bytes) or isinstance(data, list) or isinstance(data, bytearray)):
       for byte in data:
-        self.slip_send(byte)
+        self._slip_send(byte)
     elif(isinstance(data, int)):
       self.checksum += (data + 1)*check_checksum
       if(data == SLIP.END):
@@ -53,24 +53,24 @@ class Tracker_Interface(Protocol):
 
   # Sends the end of the SLIP packet
   # and the checksum to the ESP32-CAM
-  def slip_end(self):
-    self.slip_send(self.checksum & 0xFF, False)
-    self.slip_send((self.checksum >> 8) & 0xFF, False)
-    self.slip_send((self.checksum >> 16) & 0xFF, False)
-    self.slip_send((self.checksum >> 24) & 0xFF, False)
+  def _slip_end(self):
+    self._slip_send(self.checksum & 0xFF, False)
+    self._slip_send((self.checksum >> 8) & 0xFF, False)
+    self._slip_send((self.checksum >> 16) & 0xFF, False)
+    self._slip_send((self.checksum >> 24) & 0xFF, False)
     self.checksum = 0
     self.esp.write(bytes([SLIP.END]))
   
   # Handles the response from the ESP32-CAM
   # and puts it in the RX buffer
-  def handle_response(self, packet: bytes):
+  def _handle_response(self, packet: bytes):
     #print(packet)
     if(len(packet) == 0): return
     tag = packet[0]
     data = packet[1:]
     self.rx_buffer.put((tag, data))
 
-  def pop_rx_buffer(self, timeout: int = 0.3) -> tuple[int, bytes]:
+  def _pop_rx_buffer(self, timeout: int = 0.3) -> tuple[int, bytes]:
     """Pop the next response from the RX buffer.
     Returns:
       tuple[int, bytes]: The tag and data of the response.
@@ -99,11 +99,11 @@ class Tracker_Interface(Protocol):
       "int: The frame count from the tracker."
       "If the frame count is not available, returns -1."
     """
-    self.slip_send(self.CMD_REQ_FCOUNT)
-    self.slip_send(frm)
-    self.slip_end()
+    self._slip_send(self.CMD_REQ_FCOUNT)
+    self._slip_send(frm)
+    self._slip_end()
     #...
-    tag, data = self.pop_rx_buffer()
+    tag, data = self._pop_rx_buffer()
     #...
     if(tag == self.CMD_RSP_FCOUNT):
       rsp_frm = data[0]
@@ -119,10 +119,10 @@ class Tracker_Interface(Protocol):
       int: The peer count from the tracker.
       If the peer count is not available, returns -1.
     """
-    self.slip_send(self.CMD_REQ_PEERCOUNT)
-    self.slip_end()
+    self._slip_send(self.CMD_REQ_PEERCOUNT)
+    self._slip_end()
     #...
-    tag, data = self.pop_rx_buffer()
+    tag, data = self._pop_rx_buffer()
     #...
     if(tag == self.CMD_RSP_PEERCOUNT):
       peer_count = data[0]
@@ -136,10 +136,10 @@ class Tracker_Interface(Protocol):
       list[tuple[int, bytes]]: The peer list from the tracker.
       If the peer list is not available, returns an empty list.
     """
-    self.slip_send(self.CMD_REQ_PEERLIST)
-    self.slip_end()
+    self._slip_send(self.CMD_REQ_PEERLIST)
+    self._slip_end()
     #...
-    tag, data = self.pop_rx_buffer()
+    tag, data = self._pop_rx_buffer()
     #...
     if(tag == self.CMD_RSP_PEERLIST):
       peer_count = len(data) // 7
@@ -159,11 +159,11 @@ class Tracker_Interface(Protocol):
       list[tuple[int, int, int, int]]: The points as [x1, y1, x2, y2] rectangles from the tracker.
       If the points are not available, returns an empty list.
     """
-    self.slip_send(self.CMD_REQ_POINTS)
-    self.slip_send(frm)
-    self.slip_end()
+    self._slip_send(self.CMD_REQ_POINTS)
+    self._slip_send(frm)
+    self._slip_end()
     #...
-    tag, data = self.pop_rx_buffer()
+    tag, data = self._pop_rx_buffer()
     #...
     if(tag == self.CMD_RSP_POINTS):
       if(data[0] != frm):
@@ -205,12 +205,12 @@ class Tracker_Interface(Protocol):
     """
     success = True
     for key, value in configs.items():
-      self.slip_send(self.CMD_SET_CONFIG)
-      self.slip_send(peer_id)
-      self.slip_send(key.encode("ascii"))
-      self.slip_send(struct.pack("I", value))
-      self.slip_end()
-      tag, data = self.pop_rx_buffer(0.5)
+      self._slip_send(self.CMD_SET_CONFIG)
+      self._slip_send(peer_id)
+      self._slip_send(key.encode("ascii"))
+      self._slip_send(struct.pack("I", value))
+      self._slip_end()
+      tag, data = self._pop_rx_buffer(0.5)
       if(tag == self.CMD_RSP_ERROR):
         print(f"Couln't set `{key}` config")
         success = False
@@ -223,10 +223,10 @@ class Tracker_Interface(Protocol):
     Returns:
       bool: True if the configuration was reloaded successfully, False otherwise.
     """
-    self.slip_send(self.CMD_REQ_RELOAD_CONFIG)
-    self.slip_send(peer_id)
-    self.slip_end()
-    tag, data = self.pop_rx_buffer(0.5)
+    self._slip_send(self.CMD_REQ_RELOAD_CONFIG)
+    self._slip_send(peer_id)
+    self._slip_end()
+    tag, data = self._pop_rx_buffer(0.5)
     if(tag == self.CMD_RSP_RELOAD_CONFIG):
       return True
     return False
@@ -236,11 +236,11 @@ class Tracker_Interface(Protocol):
     Returns:
       int: The configuration value.
     """
-    self.slip_send(self.CMD_REQ_CONFIG)
-    self.slip_send(peer_id)
-    self.slip_send(key_name.encode("ascii"))
-    self.slip_end()
-    tag, data = self.pop_rx_buffer()
+    self._slip_send(self.CMD_REQ_CONFIG)
+    self._slip_send(peer_id)
+    self._slip_send(key_name.encode("ascii"))
+    self._slip_end()
+    tag, data = self._pop_rx_buffer()
     #print(tag, data)
     
     if(tag != self.CMD_RSP_CONFIG): return -1
@@ -253,8 +253,8 @@ class Tracker_Interface(Protocol):
 
   def reboot(self):
     """Reboot the ESP32-CAM."""
-    self.slip_send(self.CMD_REBOOT)
-    self.slip_end()
+    self._slip_send(self.CMD_REBOOT)
+    self._slip_end()
 
 # --------------------------------------------------------------------------
 # Example usage with matplotlib
@@ -262,20 +262,19 @@ class Tracker_Interface(Protocol):
 if(__name__ == "__main__"):
   import matplotlib.pyplot as plt
   from matplotlib.patches import Rectangle
-
   # Example usage
-  tracker = Tracker_Interface("COM3")
+  tracker = Tracker_Interface("COM8")
   print("Tracker interface initialized")
   time.sleep(1)
-  
+  #...
   peer_list = tracker.get_peer_list()
   print("peer list: ", peer_list)
-
+  #...
   plt.ion()  # Enable interactive mode
   fig, ax = plt.subplots()
   ax.set_xlim(0, 240)  # ESP32-CAM typical resolution
   ax.set_ylim(176, 0)  # Inverted Y-axis for image coordinates
-  
+  #...
   for peers in peer_list+[[0]]:
     tracker.set_config(peers[0],
                        trk_erode = 1,
@@ -286,10 +285,8 @@ if(__name__ == "__main__"):
     print(f"reload config {peers[0]}")
     res = tracker.reload_config(peers[0])
     print(res)
-
-
   print("Configs setted")
-
+  #...
   last_fcount_time = time.time()
   last_fcount = 0
   try:
@@ -298,13 +295,12 @@ if(__name__ == "__main__"):
       peer_count = tracker.get_peer_count()
       print("peer count: ", peer_count)
       print("peer list: ", tracker.get_peer_list())
-      
+      #...
       ax.clear()
       ax.set_xlim(0, 240)
       ax.set_ylim(176, 0)
-      # Keep track of which peers we've already labeled
       labeled_peers = set()
-  
+      #...
       fcount = tracker.get_frame_count()
       now = time.time()
       current_fps = round((fcount-last_fcount)/(now-last_fcount_time))
@@ -312,7 +308,7 @@ if(__name__ == "__main__"):
       ax.set_title(f'FPS: {current_fps}')
       last_fcount_time = now
       last_fcount = fcount
-
+      #...
       for i in range(peer_count+1):
         #print(f" |-----------------")
         #print(f" | peer #{i} ")
@@ -320,7 +316,6 @@ if(__name__ == "__main__"):
         points = tracker.get_points(i)
         #print("  +-points: ", points)
         #print(f"id{i} trk_erode:", tracker.get_config("trk_erode", i))
-
         # Draw rectangles for each point
         for rect in points:
           x1, y1, x2, y2 = rect
@@ -332,8 +327,8 @@ if(__name__ == "__main__"):
                 fill=False, color=f'C{i}', 
                 label=label))
           labeled_peers.add(i)
-
         ax.legend()
+      #...
       plt.draw()
       plt.pause(0.1)
   except KeyboardInterrupt:
