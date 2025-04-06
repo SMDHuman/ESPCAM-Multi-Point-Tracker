@@ -200,8 +200,10 @@ class Tracker_Interface(Protocol):
       - trk_erode_mul   = 3
       - trk_erode_div   = 10
       - trk_dilate      = 5
+      - trk_flip_x      = 0 (0 = disable , 1 = enable)
+      - trk_flip_y      = 0 (0 = disable , 1 = enable)
       - serial_baudrate = 115200
-      - espnet_mode    = 0  (0 = BOTH, 1 = HOST ONLY, 2 = CLIENT ONLY)
+      - espnet_mode     = 0  (0 = BOTH, 1 = HOST ONLY, 2 = CLIENT ONLY)
     """
     success = True
     for key, value in configs.items():

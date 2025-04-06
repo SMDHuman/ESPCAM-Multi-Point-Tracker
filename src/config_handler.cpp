@@ -28,10 +28,10 @@ void config_init(){
     CONFIGS.putInt("cam_expo_ctrl", 1);
     CONFIGS.putInt("cam_aec2", 0);
     CONFIGS.putInt("cam_ae_level", 0);
-    CONFIGS.putInt("trk_filter_min", 235);
-    CONFIGS.putInt("trk_erode", 3);
-    CONFIGS.putInt("trk_erode_mul", 3);
-    CONFIGS.putInt("trk_erode_div", 5);
+    CONFIGS.putInt("trk_filter_min", 230);
+    CONFIGS.putInt("trk_erode", 1);
+    CONFIGS.putInt("trk_erode_mul", 4);
+    CONFIGS.putInt("trk_erode_div", 4);
     CONFIGS.putInt("trk_dilate", 6);
     CONFIGS.putInt("trk_flip_x", 0);
     CONFIGS.putInt("trk_flip_y", 0);
