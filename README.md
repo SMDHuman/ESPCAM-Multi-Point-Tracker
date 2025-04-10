@@ -1,90 +1,156 @@
 # ESPCAM Multi-Point Tracker
-
-[Brief project description - 2-3 sentences about what this project does]
+A budget-friendly experimental project for 3D position tracking using infrared light points and ESP32-CAM modules. Multiple cameras communicate via ESP-NOW protocol to calculate 2D vectors of tracked points, enabling 3D positioning capabilities on further use.
 
 ## Features
 
-- [Key feature 1]
-- [Key feature 2]
-- [Key feature 3]
+- Multi-point infrared tracking using ESP32-CAM modules
+- Seamless inter-camera communication via ESP-NOW protocol
+- Real-time performance at ~10 FPS under default configuration settings
 
 ## Hardware Requirements
 
-- ESP32-CAM Board
-- [Other hardware requirements]
-- [Minimum specifications if any]
+- ESP32-CAM Board(s)
+- IR LED targets or markers
+- USB-TTL programmer
+- 5V power supply (or Batteries)
 
 ## Software Dependencies
 
-- PlatformIO
-- ESP32 Arduino Framework
-- Required Libraries:
-  - [List required libraries]
-
+- PlatformIO (on VSCode Recommended)
+- Python 3.11 >=
 
 ## Configuration
 
 ### Camera Settings
-- Brightness
-- Contrast
-- Saturation
-- Special Effects
-- White Balance Settings
+- Brightness, Contrast, Saturation
+- IR Filter Mode
+- White Balance
+- Resolution and Frame Rate
 
 ### Tracker Settings
-- Filter Minimum
-- Erosion Settings
-- Dilation Settings
-- Flip Settings
-
-## Network Configuration
-
-### ESP-NOW Setup
-- [Network setup instructions]
-- [Peer configuration]
-
-## Usage Examples
-
-### Basic Usage
-```cpp
-[Simple code example]
-```
-
-# Python Scripts 
-[Advanced usage examples]
+- IR Threshold Values
+- Noise Reduction Filters
+- Image Orientation
+- Point Detection Parameters
 
 ## API Reference
+To Communicate with the tracker modules, you can use `tracker_interface.py` module with your python codes. 
+> **Warning:** This Python module depends on other files in this repository, such as `tracker_interface.py` and `utils.py`. To use it, ensure your Python import path includes the cloned repository. For example:
+> ```python
+> import sys
+> sys.path.append("path/to/cloned/repository")
+> ```
 
-### Serial Commands
-- [List of available commands]
-- [Command format]
-- [Response format]
+### Dependent Libraries To tracker_interface.py
+To use tracker_interface.py to utilize all tracker's capabilities, you'll need to create a `Tracker_Interface()` object first, which serves as the main interface for communicating with and configuring the tracker modules.
+- pyparsing
 
-### Configuration Parameters
-- [List of configurable parameters]
-- [Parameter descriptions]
+### Usage
+To use tracker_interface.py to utilize all tracker's capibilities, you'll need to create a `Tracker_Interface()` object first.
+```python 
+tracker = Tracker_Interface("Port Name", baudrate = 115200, timeout = 1)
+```
+After that you are ready to go.
+### Methods
+```python
+# Get total processed frame count from specified peer
+tracker.get_frame_count(frm = 0) -> int
+
+# Get number of connected peers
+tracker.get_peer_count() -> int
+
+# Get list of peers with their IDs and MAC addresses
+tracker.get_peer_list() -> list[tuple[int, MAC]]
+
+# Get detected point coordinates as rectangles => [(x1, y1, x2, y2), ...]
+tracker.get_points(frm = 0) -> list[tuple[int, int, int, int]]
+# Returns a list of rectangles representing detected points, where each tuple contains:
+# (x1, y1) - Top-left corner coordinates of the rectangle
+# (x2, y2) - Bottom-right corner coordinates of the rectangle
+
+# Set configuration parameters for specific peer
+tracker.set_config(peer_id: int = 0, **configs) -> bool
+
+# Reload configuration for specific peer
+tracker.reload_config(peer_id = 0) -> bool
+
+# Get specific configuration value
+tracker.get_config(key_name, peer_id = 0) -> int
+
+# Reboot the tracker system
+tracker.reboot() -> None
+```
+
+#### Example Usage
+```python
+from tracker_interface import Tracker_Interface
+
+tracker = Tracker_Interface("COM3")  # "COM3" refers to the serial port of the tracker device
+
+# Configure every peer with same settings
+# Note: Normally, all configuration parameters persist in their flash memory, so you only need to perform this step
+#       once for every new peer. However, it is not a resource-heavy process.
+peers = tracker.get_peer_list()
+for peer_id, peer_mac in peers:
+  tracker.set_config(peer_id, cam_brightness = -1, cam_contrast = 1)
+  tracker.reload_config(peer_id)
+
+# Get points from every peer
+while(True):
+  peers = tracker.get_peer_list()
+  for peer_id, peer_mac in peers:
+    print("====")
+    print("Points from ", peer_id)
+    points = tracker.get_points(peer_id)
+    for rect in points:
+      print("----")
+      print(f"x: {rect[0]}, y: {rect[1]}")
+      print(f"size: {rect[2]-rect[0]}x{rect[3]-rect[1]}")
+```
+
+### Config Variables
+  - Camera Variables
+    - `cam_brightness`  = 0 (-2 to 2)
+    - `cam_contrast`    = 0 (-2 to 2)
+    - `cam_saturation`  = 0 (-2 to 2)
+    - `cam_spec_effect` = 2 (0 to 6 [0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia])
+    - `cam_whitebal`    = 1 (0 = disable , 1 = enable)
+    - `cam_awb_gain`    = 1 (0 = disable , 1 = enable)
+    - `cam_wb_mode`     = 0 (0 to 4 !if awb_gain enabled! [0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home])
+    - `cam_expo_ctrl`   = 1 (0 = disable , 1 = enable)
+    - `cam_aec2`        = 0 (0 = disable , 1 = enable)
+    - `cam_ae_level`    = 0 (-2 to 2)
+  - Tracker Variables
+    - `trk_filter_min`  = 235
+    - `trk_erode`       = 1
+    - `trk_erode_mul`   = 3
+    - `trk_erode_div`   = 10
+    - `trk_dilate`      = 5
+    - `trk_flip_x`      = 0 (0 = disable , 1 = enable)
+    - `trk_flip_y`      = 0 (0 = disable , 1 = enable)
+  - Module Variables
+    - `cfg_restore`     = false (If True, device restore all variables to default on next reboot)
+    - `serial_baudrate` = 115200
+    - `espnet_mode`     = 0  (0 = BOTH, 1 = HOST ONLY, 2 = CLIENT ONLY)
+
 
 ## Troubleshooting
 
 ### Common Issues
-- [Common issue 1]
-  - Solution: [Solution steps]
-- [Common issue 2]
-  - Solution: [Solution steps]
-
-### Debug Mode
-[Debug mode instructions]
-
-## Contributing
-
-[Contributing guidelines]
+- Camera Not Detected
+  - Check power supply stability:
+    - Ensure the power supply provides a stable 5V output.
+- Poor Point Detection
+  - Adjust IR threshold
+  - Check ambient lighting
+  - Ensure IR markers are functioning correctly
+  - Adjust the camera's position for better visibility of the markers
+    - Confirm that the PSRAM is enabled in the firmware settings (e.g., in `sdkconfig` for ESP-IDF or `platformio.ini` for PlatformIO).
+    - Check the ESP32-CAM datasheet to ensure the PSRAM is compatible and properly connected.
+    - Reflash the firmware if necessary, ensuring the correct PSRAM settings are applied.
 
 ## License
 
-[License information]
+This project is licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
 
-## Acknowledgments
-
-- [Credits]
-- [Inspirations]
-- [References]
+The MIT License permits anyone to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, provided that the original copyright notice and permission notice are included in all copies or substantial portions of the software.

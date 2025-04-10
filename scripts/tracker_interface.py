@@ -3,6 +3,7 @@ from serial.threaded import ReaderThread, Protocol
 import time, os, sys, struct, datetime
 import queue
 import serial.threaded
+
 from enum_parser import enum_parser
 from pyslip import SLIP
 from mac_type import MAC
