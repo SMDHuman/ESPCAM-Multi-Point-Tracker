@@ -37,8 +37,7 @@ void config_init(){
     CONFIGS.putInt("trk_flip_y", 0);
     CONFIGS.putInt("serial_baudrate", 115200);
     CONFIGS.putInt("espnet_mode", MODE_NONE);
-    
-    // Blink led 5 times
+    // Blink led 5 times to indicate default values have been set
     for(uint8_t i = 0; i < 5; i++){
       digitalWrite(LED_BUILTIN, LOW);
       delay(100);
