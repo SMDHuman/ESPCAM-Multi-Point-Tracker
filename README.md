@@ -35,18 +35,18 @@ A budget-friendly experimental project for 3D position tracking using infrared l
 
 ## API Reference
 To Communicate with the tracker modules, you can use `tracker_interface.py` module with your python codes. 
-> **Warning:** This Python module depends on other files in this repository, such as `tracker_interface.py` and `utils.py`. To use it, ensure your Python import path includes the cloned repository. For example:
+> **Warning:** This Python module depends on other files in this repository, such as some header files from firmware. To use it, ensure your Python import path includes the cloned repository. For example:
 > ```python
 > import sys
 > sys.path.append("path/to/cloned/repository")
 > ```
 
 ### Dependent Libraries To tracker_interface.py
-To use tracker_interface.py to utilize all tracker's capabilities, you'll need to create a `Tracker_Interface()` object first, which serves as the main interface for communicating with and configuring the tracker modules.
+- pyserial
 - pyparsing
 
 ### Usage
-To use tracker_interface.py to utilize all tracker's capibilities, you'll need to create a `Tracker_Interface()` object first.
+To use tracker_interface.py to utilize all tracker's capabilities, you'll need to create a `Tracker_Interface()` object first, which serves as the main interface for communicating with and configuring the tracker modules.
 ```python 
 tracker = Tracker_Interface("Port Name", baudrate = 115200, timeout = 1)
 ```
