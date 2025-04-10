@@ -1,0 +1,3 @@
+[submodule "scripts/usb_now"]
+	path = scripts/usb_now
+	url = https://github.com/SMDHuman/usb-now

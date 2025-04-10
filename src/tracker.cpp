@@ -2,7 +2,7 @@
 //
 //-----------------------------------------------------------------------------
 #include "tracker.h"
-#include "camera.h"
+#include "camera_handler.h"
 #include "serial_com.h"
 
 //#define DEBUG
@@ -26,56 +26,51 @@ uint8_t tracker_points_len = 0;
 point_rect_t tracker_points_rect[254];
 tracker_status_e tracker_status = WAIT;
 
+static uint32_t filter_min;
+static uint32_t erode;
+static uint32_t erode_mul;
+static uint32_t erode_div;
+static uint32_t dilate;
+static uint32_t flip_x;
+static uint32_t flip_y;
+
 //-----------------------------------------------------------------------------
 void tracker_init(){
-  //tracker_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
-  //tracker_old_frame = (uint16_t *)malloc(tracker_width * tracker_height * sizeof(uint16_t));
 }
 //-----------------------------------------------------------------------------
-void tracker_task(){
-  if(tracker_status == READY){
-    tracker_status = PROCESS;
-    //...
-    //switch_buffers();
-    filter_buffer();
-    if(request_frame == 1){
-      send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 1);
-      request_frame = 0;
-    }
-    //...
-    //switch_buffers();
-    erode_buffer();
-    if(request_frame == 2){
-      send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 2);
-      request_frame = 0;
-    }
-    //...
-    //switch_buffers();
-    dilate_buffer();
-    if(request_frame == 3){
-      send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 3);
-      request_frame = 0;
-    }
-    //...
-    flood_buffer();
-    if(request_frame == 4){
-      send_image(TRACKER_WIDTH, TRACKER_HEIGHT, tracker_buffer_A, TRACKER_BUF_LEN, 4);
-      request_frame = 0;
-    }
-    locate_rect_buffer();
-    tracker_status = WAIT;
-    tracker_frame_count++;
-  }
+void tracker_task(void * pvParameters){
+}
+//-----------------------------------------------------------------------------
+void tracker_load_configs(){
+  filter_min = CONFIGS.getInt("trk_filter_min");
+  erode = CONFIGS.getInt("trk_erode");
+  erode_mul = CONFIGS.getInt("trk_erode_mul");
+  erode_div = CONFIGS.getInt("trk_erode_div");
+  dilate = CONFIGS.getInt("trk_dilate");
+  flip_x = CONFIGS.getInt("trk_flip_x");
+  flip_y = CONFIGS.getInt("trk_flip_y");
+}
+//-----------------------------------------------------------------------------
+void tracker_process(){
+  filter_buffer();
+  erode_buffer();
+  dilate_buffer(); 
+  flood_buffer();
+  locate_rect_buffer();
+      
+  tracker_frame_count++;
 }
 //-----------------------------------------------------------------------------
 // Pushes camera frame buffer to tracker buffer 'A'
-void push_camera_buffer(camera_fb_t *fb){
+void tracker_push_camera_buffer(camera_fb_t *fb){
   //switch_buffers();
-  for(size_t y = 0; y < TRACKER_HEIGHT; y++){
-    for(size_t x = 0; x < TRACKER_WIDTH; x++){
-      size_t fb_x = (fb->width * x) / TRACKER_WIDTH;
-      size_t fb_y = (fb->height * y) / TRACKER_HEIGHT;
-      tracker_buffer_A[(y*TRACKER_WIDTH)+x] = fb->buf[(fb_y*fb->width)+fb_x];
+  for(int y = 0; y < TRACKER_HEIGHT; y++){
+    for(int x = 0; x < TRACKER_WIDTH; x++){
+      int fb_x = (fb->width * x) / TRACKER_WIDTH;
+      int fb_y = (fb->height * y) / TRACKER_HEIGHT;
+      int f_x = flip_x ? (TRACKER_WIDTH-x-1) : x;
+      int f_y = flip_y ? (TRACKER_HEIGHT-y-1) : y;
+      tracker_buffer_A[(f_y*TRACKER_WIDTH)+f_x] = fb->buf[(fb_y*fb->width)+fb_x];
     }
   }
 }
@@ -85,7 +80,7 @@ static void filter_buffer(){
   //uint8_t buffer_B[TRACKER_BUF_LEN];
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   for(size_t i = 0; i < TRACKER_BUF_LEN; i++){
-    if(tracker_buffer_A[i] < TRACKER_FILTER_MIN){
+    if(tracker_buffer_A[i] < filter_min){
       buffer_B[i] = 0x00;
     }else{
       buffer_B[i] = 0xFF;
@@ -101,21 +96,21 @@ static void erode_buffer(){
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   memset(buffer_B, 0, TRACKER_BUF_LEN);
   //...
-  static const uint16_t area = (TRACKER_ERODE*2+1)*(TRACKER_ERODE*2+1); 
-  for(size_t y = 0; y < TRACKER_HEIGHT-(TRACKER_ERODE*2); y++){
-    for(size_t x = 0; x < TRACKER_WIDTH-(TRACKER_ERODE*2); x++){
+  static const uint16_t area = (erode*2+1)*(erode*2+1); 
+  for(size_t y = 0; y < TRACKER_HEIGHT-(erode*2); y++){
+    for(size_t x = 0; x < TRACKER_WIDTH-(erode*2); x++){
       //...
       uint16_t count = 0;
-      for(size_t dy = 0; dy < TRACKER_ERODE*2+1; dy++){
-        for(size_t dx = 0; dx < TRACKER_ERODE*2+1; dx++){
+      for(size_t dy = 0; dy < erode*2+1; dy++){
+        for(size_t dx = 0; dx < erode*2+1; dx++){
           if(tracker_buffer_A[((y+dy)*TRACKER_WIDTH)+(x+dx)] == 0xFF){
             count ++;
           }
       }}
-      if(area*TRACKER_ERODE_RATIO <= count*TRACKER_ERODE_RATIO_DIV){
-        buffer_B[((y+TRACKER_ERODE)*TRACKER_WIDTH)+(x+TRACKER_ERODE)] = 0xFF;
+      if(area*erode_mul <= count*erode_div){
+        buffer_B[((y+erode)*TRACKER_WIDTH)+(x+erode)] = 0xFF;
       }else{
-        buffer_B[((y+TRACKER_ERODE)*TRACKER_WIDTH)+(x+TRACKER_ERODE)] = 0x0;
+        buffer_B[((y+erode)*TRACKER_WIDTH)+(x+erode)] = 0x0;
       }
   }}
   //...
@@ -128,12 +123,12 @@ static void dilate_buffer(){
   uint8_t *buffer_B = (uint8_t *)malloc(TRACKER_BUF_LEN);
   memset(buffer_B, 0, TRACKER_BUF_LEN);
   //...
-  for(size_t y = 0; y < TRACKER_HEIGHT-(TRACKER_DILATE*2); y++){
-    for(size_t x = 0; x < TRACKER_WIDTH-(TRACKER_DILATE*2); x++){
+  for(size_t y = 0; y < TRACKER_HEIGHT-(dilate*2); y++){
+    for(size_t x = 0; x < TRACKER_WIDTH-(dilate*2); x++){
       //...
-      if(tracker_buffer_A[((y+TRACKER_DILATE)*TRACKER_WIDTH)+(x+TRACKER_DILATE)] == 0xFF){
-        for(size_t dy = 0; dy < TRACKER_DILATE*2+1; dy++){
-          for(size_t dx = 0; dx < TRACKER_DILATE*2+1; dx++){
+      if(tracker_buffer_A[((y+dilate)*TRACKER_WIDTH)+(x+dilate)] == 0xFF){
+        for(size_t dy = 0; dy < dilate*2+1; dy++){
+          for(size_t dx = 0; dx < dilate*2+1; dx++){
             buffer_B[((y+dy)*TRACKER_WIDTH)+(x+dx)] = 0xFF;
         }}
       }
@@ -145,10 +140,10 @@ static void dilate_buffer(){
 
 //-----------------------------------------------------------------------------
 static void flood_buffer(){
-  uint8_t island_count = 1;
+  uint8_t island_count = 0;
   for(size_t i = 0; i < TRACKER_BUF_LEN; i++){
     if(tracker_buffer_A[i] == 255){
-      flood_fill(i, island_count);
+      flood_fill(i, island_count+1);
       island_count++;
       if(island_count == 255){
         return;

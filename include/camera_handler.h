@@ -37,19 +37,13 @@ static camera_config_t camera_config = {
 };
 
 //-----------------------------------------------------------------------------
-enum capture_mode_e {
-    ONESHOT,
-    STREAM,
-    ONLED
-};
-extern capture_mode_e camera_capture_mode;
-extern bool camera_trigger;
-extern uint64_t camera_width;
-extern uint64_t camera_height;
+extern uint32_t camera_width;
+extern uint32_t camera_height;
 
 //-----------------------------------------------------------------------------
 void camera_init();
-void camera_task();
+void camera_task(void * pvParameters);
+void camera_load_configs();
 
 //-----------------------------------------------------------------------------
 #endif

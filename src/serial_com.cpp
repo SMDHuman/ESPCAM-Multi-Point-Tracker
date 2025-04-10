@@ -1,134 +1,51 @@
 //-----------------------------------------------------------------------------
-//
+// File: serial_com.cpp
+// Last modified: 27/03/2025
 //-----------------------------------------------------------------------------
+#include <Arduino.h>
 #include "serial_com.h"
-#include "camera.h"
-#include "tracker.h"
-#include "utils.h"
-#include "slip_decoder.h"
+#include "command_handler.h"
 
-static uint64_t checksum = 0;
-static uint64_t data_count = 0;
-static uint8_t wait_ack = false;
+#define SLIP_IMPLEMENTATION
+#include "p_slip.h"
+
+static uint32_t checksum = 0;
+static uint8_t rx_slip_buffer[2028];
 
 //-----------------------------------------------------------------------------
+// Initialize the serial communication with the specified baud rate
 void serial_init(){
-  Serial.begin(BAUDRATE);
+  uint32_t baudrate = CONFIGS.getInt("serial_baudrate", 115200);
+  Serial.begin(baudrate);
+  slip_init(rx_slip_buffer, sizeof(rx_slip_buffer));
 }
 
 //-----------------------------------------------------------------------------
-void serial_task(){
-  if(Serial.available()){
-    slip_push(Serial.read());
-  }
-  if(slip_is_ready()){
-    uint8_t cmd = slip_package_buffer[0];
-    //...
-    camera_trigger = false;
-    switch(cmd){
-      //...
-      case CMD_TRIGGER:
-        if(camera_capture_mode == ONESHOT){
-          camera_trigger = true;
-        }
-      break;
-      //... 
-      case CMD_ONESHOT:
-        camera_capture_mode = ONESHOT;
-      break;
-      //...
-      case CMD_STREAM:
-        camera_capture_mode = STREAM;
-      break;
-      //...
-      case CMD_ONLED:
-        camera_capture_mode = ONLED;
-      break;
-      //...
-      case RQT_RECTS:
-        send_slip_single(RECTS);
-        send_slip((uint8_t*)tracker_points_rect, tracker_points_len*sizeof(point_rect_t));
-        end_slip();
-      break;
-      //...
-      case RQT_FRAME_COUNT:
-      {
-        send_slip_single(FRAME_COUNT);
-        convert64_u frm_cnt{.number=tracker_frame_count};
-        send_slip(frm_cnt.div4, 4);
-        end_slip();
-      }
-      break;
-      //...
-      case RQT_TRACKER_FRAME_SIZE:
-        send_slip_single(TRACKER_SIZE);
-        send_slip_single(TRACKER_WIDTH);
-        send_slip_single(TRACKER_HEIGHT);
-        end_slip();
-      break;
-      //...
-      case RQT_CAMERA_FRAME_SIZE:
-      {
-        send_slip_single(CAMERA_SIZE);
-        convert64_u cw{.number=camera_width};
-        send_slip(cw.div4, 4);
-        convert64_u ch{.number=camera_height};
-        send_slip(ch.div4, 4);
-        end_slip();
-      }
-      break;
-      //...
-      case RQT_TRACKER_FRAME:
-      {
-        request_frame = slip_package_buffer[1];
-      }
-      break;
-      //...
-      case WRITE_CONFIG:
-      {
-        memcpy(&config, &slip_package_buffer[1], sizeof(config));
-        config_commit();
-      }
-      break;
-      //...
-      case READ_CONFIG:
-      {
-        send_slip_single(CONFIG);
-        uint8_t config_package[sizeof(config)];
-        memcpy(config_package, &config, sizeof(config));
-        send_slip(config_package, sizeof(config));
-        end_slip();
-      }
-      break;
-      //...
-      case RESET_CONFIG:
-      {
-        config_set_reset_flag();
-      }
-      break;
+// Handle serial communication tasks, including reading and processing commands
+void serial_task(void * pvParameters){
+  while(1){
+    while(Serial.available()){
+      slip_push(rx_slip_buffer, Serial.read()); 
     }
-    slip_reset();
+    if(slip_is_ready(rx_slip_buffer)){
+      size_t package_len = slip_get_size(rx_slip_buffer);
+      uint8_t *package = slip_get_buffer(rx_slip_buffer);
+      command_parse(package, package_len);
+      slip_reset(rx_slip_buffer);
+    }
+    vTaskDelay(1);
   }
 }
 
 //-----------------------------------------------------------------------------
-void send_slip(uint8_t *buf, size_t len){
-  for(size_t i = 0; i < len; i++){
-    send_slip_single(buf[i]);
-  }
+void serial_load_configs(){
+
 }
 
 //-----------------------------------------------------------------------------
-void send_slip_single(uint8_t data){
-  if(data_count == S_MAX_PACKAGE){
-    Serial.write(S_ESC); // ESC+END == ACK
-    Serial.write(S_END);
-    while(!Serial.available()); // Wair for ACK
-    Serial.read();
-    data_count = 0;
-  }
-  //...
-  checksum += data;
+// Send a byte using the SLIP protocol
+void serial_send_slip(uint8_t data){
+  checksum += data + 1;
   if(data == S_END){
     Serial.write(S_ESC);
     Serial.write(S_ESC_END);
@@ -140,39 +57,41 @@ void send_slip_single(uint8_t data){
   else{
     Serial.write(data);
   }
-  data_count++;
 }
 //-----------------------------------------------------------------------------
-void end_slip(){
-  convert64_u value{
-    .number = checksum
-  };
-  send_slip(value.div4, 4);
+// Send a buffer using the SLIP protocol
+void serial_send_slip(uint8_t* buf, size_t len){
+  for(size_t i = 0; i < len; i++){
+    serial_send_slip(buf[i]);
+  }
+}
+//-----------------------------------------------------------------------------
+// Send an unsigned integer using the SLIP protocol
+void serial_send_slip(uint data){
+  serial_send_slip((uint8_t*)&data, sizeof(data));
+}
+//-----------------------------------------------------------------------------
+// Send an integer using the SLIP protocol
+void serial_send_slip(int data){
+  serial_send_slip((uint8_t*)&data, sizeof(data));
+}
+//-----------------------------------------------------------------------------
+// Send a char using the SLIP protocol
+void serial_send_slip(char data){
+  serial_send_slip((uint8_t)data);
+}
+//-----------------------------------------------------------------------------
+// Send a string using the SLIP protocol
+void serial_send_slip(String data){
+  for(size_t i = 0; i < data.length(); i++){
+    serial_send_slip(data[i]);
+  }
+}
+//-----------------------------------------------------------------------------
+// Send the end of the slip package
+void serial_end_slip(){
+  uint32_t final_checksum = checksum;
+  serial_send_slip(final_checksum);
   Serial.write(S_END);
   checksum = 0;
-  data_count = 0;
-}
-
-//-----------------------------------------------------------------------------
-void send_image(size_t w, size_t h, uint8_t *buf, size_t len, uint8_t id){
-  send_slip_single(tx_package_type_e::FRAME);
-  send_slip_single(id);
-  convert64_u w_c{.number=w};
-  convert64_u h_c{.number=h};
-  send_slip(w_c.div4, 4); // Send width
-  send_slip(h_c.div4, 4); // Send height
-  send_slip(buf, len);    // Frame buffer
-  end_slip();
-}
-//-----------------------------------------------------------------------------
-void send_debug(String text){
-  send_slip_single(tx_package_type_e::DEBUG_STR);
-  for(size_t i = 0; i < text.length(); i++){
-    send_slip_single(text[i]);
-  }
-  end_slip();
-}
-//-----------------------------------------------------------------------------
-void send_debug(int number){
-  send_debug(String(number));
 }
