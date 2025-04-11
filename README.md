@@ -19,8 +19,28 @@ A budget-friendly experimental project for 3D position tracking using infrared l
 - PlatformIO (on VSCode Recommended)
 - Python 3.11 >=
 
-## Configuration
+## How Does It Work?
+The main focus of this project is the firmware to utilize the image processing capabilities of ESP32-CAM module. The firmware utilizes both cores of the ESP32. One is for all communication between peers, wifi and serial. User request or set values from serial communication channel. All other operations between peers done seamless by the ESP32. 
 
+Other core process just frames that camera captures. The main 'seperation' process of bright points to track is splits to 6 steps. 
+
+1. **Image Capture**
+Raw image acquisition from ESP32-CAM. The configuration variables, such as `cam_brightness` or `cam_contrast`, determine the result of this image. The image buffer uses a 1-byte-per-pixel grayscale format for simplicity and efficiency.
+2. **Light Level Filter**
+Threshold filtering to identify bright spots. 
+3. **Erode** 
+Noise reduction and spot isolation. Small and lone pixels cleaned here.
+4. **Dilate**: 
+Inflate remaining valid spots. Also near spots merge here.
+5. **Flood Fill**: 
+Identify separate bright regions with floodfill algorithm. Each island has a unique number.
+6. **Center Detection**: 
+Calculate the size occupation of each island to get a rectangle vectors of it.
+
+<img src="/images/Filter_Layers.png" width="400" title="hover text">
+
+---
+## Configuration
 ### Camera Settings
 - Brightness, Contrast, Saturation
 - IR Filter Mode
@@ -33,6 +53,7 @@ A budget-friendly experimental project for 3D position tracking using infrared l
 - Image Orientation
 - Point Detection Parameters
 
+---
 ## API Reference
 To Communicate with the tracker modules, you can use `tracker_interface.py` module with your python codes. 
 > **Warning:** This Python module depends on other files in this repository, such as some header files from firmware. To use it, ensure your Python import path includes the cloned repository. For example:
@@ -97,12 +118,10 @@ for peer_id, peer_mac in peers:
 
 # Get points from every peer
 while(True):
-  peers = tracker.get_peer_list()
-  for peer_id, peer_mac in peers:
+  for peer_id, peer_mac in tracker.get_peer_list():
     print("====")
     print("Points from ", peer_id)
-    points = tracker.get_points(peer_id)
-    for rect in points:
+    for rect in tracker.get_points(peer_id):
       print("----")
       print(f"x: {rect[0]}, y: {rect[1]}")
       print(f"size: {rect[2]-rect[0]}x{rect[3]-rect[1]}")
@@ -134,6 +153,7 @@ while(True):
     - `espnet_mode`     = 0  (0 = BOTH, 1 = HOST ONLY, 2 = CLIENT ONLY)
 
 
+---
 ## Troubleshooting
 
 ### Common Issues
@@ -149,6 +169,7 @@ while(True):
     - Check the ESP32-CAM datasheet to ensure the PSRAM is compatible and properly connected.
     - Reflash the firmware if necessary, ensuring the correct PSRAM settings are applied.
 
+---
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
