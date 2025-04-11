@@ -32,9 +32,9 @@ Threshold filtering to identify bright spots.
 Noise reduction and spot isolation. Small and lone pixels cleaned here.
 4. **Dilate**: 
 Inflate remaining valid spots. Also near spots merge here.
-5. **Flood Fill**: 
+5. **Flood Fill Seperation**: 
 Identify separate bright regions with floodfill algorithm. Each island has a unique number.
-6. **Center Detection**: 
+6. **Vectorizaton**: 
 Calculate the size occupation of each island to get a rectangle vectors of it.
 
 <img src="/images/Filter_Layers.png" width="400" title="hover text">
