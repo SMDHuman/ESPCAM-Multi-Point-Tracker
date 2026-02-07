@@ -266,7 +266,7 @@ if(__name__ == "__main__"):
   import matplotlib.pyplot as plt
   from matplotlib.patches import Rectangle
   # Example usage
-  tracker = Tracker_Interface("COM8")
+  tracker = Tracker_Interface("/dev/ttyUSB0")
   print("Tracker interface initialized")
   time.sleep(1)
   #...
